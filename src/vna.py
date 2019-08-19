@@ -150,7 +150,7 @@ class VNA(object):
         """
         self.write('SENS1:CORR:COLL:SAVE')
 
-    def state_save(self, stype='CSTate', reg='A'):
+    def state_save(self, filename, stype='CSTate'):
         """
         MMEMory:STORe:STYPe {STATe|CSTate|DSTate|CDSTate}
             STATe       Measurement conditions
@@ -158,31 +158,20 @@ class VNA(object):
             DSTate      Measurement conditions and data traces
             CDSTate     Measurement conditions, calibration tables and data
                         traces
-        MMEMory:STORe:CHANnel[:STATe] {A|B|C|D}
-            A   Save to register A
-            B   Save to register B
-            C   Save to register C
-            D   Save to register D
+
+        MMEMory:STORe[:STATe] <string>
         """
         STYPE = ['state', 'cstate', 'dstate', 'cdstate',]
-        REG = ['a','b','c','d',]
         assert stype.lower() in STYPE
-        assert reg.lower() in REG
 
         self.write('MMEM:STOR:STYP {}'.format(stype))
-        self.write('MMEM:STOR:CHAN {}'.format(reg))
+        self.write('MMEM:STOR "{}"'.format(filename))
 
-    def state_recall(self, reg='A'):
+    def state_recall(self, filename):
         """
-        MMEMory:LOAD:CHANnel[:STATe] {A|B|C|D}
-            A   Recall from register A
-            B   Recall from register B
-            C   Recall from register C
-            D   Recall from register D
+        MMEMory:LOAD[:STATe] <string>
         """
-        REG = ['a','b','c','d',]
-        assert reg.lower() in REG
-        self.write('MMEM:LOAD:CHAN {}'.format(reg))
+        self.write('MMEM:LOAD {}'.format(filename))
 
     def trace(self, s11='MLOG', s21='MLOG', res=1001):
 
@@ -218,7 +207,61 @@ class VNA(object):
         self.write('MMEM:STOR:SNP:TYPE:S2P 1,2') # not mentioned in manual
         self.write('MMEM:STOR:SNP:FORM {}'.format(fmt))
         self.write('MMEM:STOR:SNP "{}"'.format(name))
-        
+
+    def power_level(self, dbm=None):
+        """
+        SOURce<Ch>:POWer[:LEVel][:IMMediate][:AMPLitude] <power>
+            <power>     the power level from -55 to +3
+                        Resolution 0.05
+        """
+
+        def myround(x, base=0.05):
+            return base * round(x / base)
+
+        if dbm == None:
+            return self.read('SOUR1:POW?') #Get data as string
+        elif dbm <=3 and dbm >=-55:
+            self.write('SOUR1:POW {}'.format(myround(dbm)))
+        else:
+            raise ValueError('Invalid parameter')
+
+    def power_slope(self, slope=None):
+        """
+        SOURce<Ch>:POWer[:LEVel]:SLOPe[:DATA] <power>
+            <power>     the power slope value from -2 to +2
+                        Resolution 0.1
+        """
+        if slope == None:
+            return self.read('SOUR1:POW:SLOP?') #Get data as string
+        elif dbm <=3 and dbm >=-55:
+            self.write('SOUR1:POW:SLOP {}'.format(round(slope,1)))
+        else:
+            raise ValueError('Invalid parameter')
+
+    def power_freq(self, freq=None):
+        """
+        SENSe<Ch>:FREQuency[:CW] <frequency>
+            <frequency> for TR1300/1 between 3e5 and 1.3e9
+        """
+        if freq == None:
+            return self.read('SENS1:FREQuency?') #Get data as string
+        elif freq in range(3e5, 1.3e9+1):
+            self.write('SENS1:FREQ {}'.format(freq))
+        else:
+            raise ValueError('Invalid parameter')
+
+    def power_enable(self, enable=None):
+        """
+        OUTPut[:STATe] {ON|OFF|1|0}
+        """
+        if enable == None:
+            return self.read('OUTP?') #Get data as string
+        elif enable:
+            self.write('OUTP 1')
+        elif not enable:
+            self.write('OUTP 0')
+        else:
+            raise ValueError('Invalid parameter')
 
     def measure(self):
 
