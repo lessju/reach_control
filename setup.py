@@ -21,10 +21,7 @@ setup_args = {
     'packages' : ['reach_ctrl','reach_ctrl.tests'],
     'package_dir' : {'reach_ctrl': 'src', 'reach_ctrl.tests':'tests'},
     'scripts':glob.glob('scripts/*'),
-    'install_requires':[
-          'pyvisa',
-          'pyvisa-py',
-      ],
+    'install_requires':read('requirements.txt').splitlines(),
     'long_description':read('README.md'),
     'classifiers':[
         'Development Status :: 1 - Planning',

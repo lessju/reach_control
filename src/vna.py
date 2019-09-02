@@ -23,8 +23,7 @@ class SCPIInterface(object):
         try:
             self.CMT = rm.open_resource('TCPIP0::{}::{}::SOCKET'.format(ip,port))
         except Exception as e:
-            self.logger.debug(e)
-            self.logger.debug('Failure to connect to VNA at {}:{}!'.format(ip,port))
+            self.logger.error(e)
 
         #The VNA ends each line with this. Reads will time out without this
         self.CMT.read_termination = self.term
