@@ -1,0 +1,43 @@
+---
+# A list of operations
+operations:
+    - init_spec:
+        name: spec0
+        host: 10.1.0.95
+        bitstream: spectrometer_16k_quad_2019_Jan_08_1810.fpg
+        nch: 16384
+    - measure:
+        name: spec0
+        path: /tmp/reach/
+        length: 6103
+        soft: 4
+    - test:
+        name: test0
+
+logging:
+    version: 1
+    disable_existing_loggers: false
+    
+    formatters:
+        standard:
+            format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    
+    handlers:
+        console:
+            class: logging.StreamHandler
+            level: NOTSET
+            formatter: standard
+    
+        file_handler:
+            class: logging.handlers.TimedRotatingFileHandler
+            level: NOTSET
+            formatter: standard
+            filename: /tmp/reach_ctrl.log
+            when: D
+
+    loggers:
+        REACH:
+            level: DEBUG
+            handlers: [console, file_handler]
+            propogate: no
+...

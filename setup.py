@@ -1,6 +1,6 @@
 from __future__ import absolute_import, division, print_function
 import os, glob
-from setuptools import setup 
+from setuptools import setup, find_packages
 
 # Utility function to read the README file.
 # Used for the long_description.  It's nice, because now 1) we have a top level
@@ -18,8 +18,9 @@ setup_args = {
     'license' : "LICENSE",
     'keywords' : "digital control REACH",
     'url' : "https://github.com/ianmalcolm/reach_ctrl",
-    'packages' : ['reach_ctrl','reach_ctrl.tests'],
-    'package_dir' : {'reach_ctrl': 'src', 'reach_ctrl.tests':'tests'},
+    'packages' : find_packages(),
+    'include_package_data' : True,
+    'package_data' : {'' : ['config/*.yaml', 'config/*.fpg'],},
     'scripts':glob.glob('scripts/*'),
     'install_requires':read('requirements.txt').splitlines(),
     'long_description':read('README.md'),
@@ -34,4 +35,5 @@ setup_args = {
 }
 
 if __name__ == '__main__':
+
     setup(**setup_args)
