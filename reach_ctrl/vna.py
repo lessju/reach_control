@@ -5,7 +5,16 @@ import numpy as np
 class SCPIInterface(object):
 
     def __init__(self, **kwargs):
-        """ SCPI-1999
+        """ SCPI-1999 for Copper Mountain VNA
+            Please ensure that you run VNA GUI and enable TCP interface
+            before instantiate this class
+
+            ip          default value is localhost
+            port        default value is 5025
+            term        termination. default value is LF (Line Feed)
+
+            Please refer to the link below for a full list of commands
+            https://coppermountaintech.com/wp-content/uploads/2019/08/TRVNA_Programming_Manual_SCPI.pdf
         """
 
         self.ip = kwargs.get('ip', 'localhost')
@@ -20,7 +29,7 @@ class SCPIInterface(object):
         #Connect to a Socket on the local machine at 5025
         #Use the IP address of a remote machine to connect to it instead
         try:
-            self.CMT = rm.open_resource('TCPIP0::{}::{}::SOCKET'.format(ip,port))
+            self.CMT = rm.open_resource('TCPIP0::{}::{}::SOCKET'.format(self.ip,self.port))
         except Exception as e:
             self.logger.critical('Cannot establish SCPI connection!',exc_info=True)
 
@@ -31,6 +40,9 @@ class SCPIInterface(object):
         self.CMT.timeout = self.timeout
 
     def write(self, msg, **kwargs):
+        """ Send a message through SCPI
+            A termination is appended for each message
+        """
 
         assert msg.endswith(self.term), \
             '{}\nMissing read_termination in write message'.format(msg)
@@ -41,6 +53,8 @@ class SCPIInterface(object):
 
 
     def read(self, msg):
+        """ Read value or state through SCPI
+        """
 
         assert msg.endswith(self.term), \
             '{}\nMissing read_termination in read message'.format(msg)
@@ -52,13 +66,27 @@ class SCPIInterface(object):
 class VNA(object):
 
     def __init__(self, interface, **kwargs):
+        """ Tested on Copper Mountain VNA TR1300/1
+            interface       SCPIInterface
+            term
+        """
 
         self.itf = interface
         self.logger = kwargs.get('logger', logging.getLogger(__name__))
         self.term = kwargs.get('term', '\n')
 
     def init(self, **kwargs):
-        # To do list
+        """ VNA Initialization
+
+            Possible options are:
+            channel     1
+            freqstart   start frequency in MHz
+            freqstop    stop frequency in MHz
+            ifbw        intermediate frequency bandwidth
+            average     e.g. 10
+            power_level in dBm
+            calib_kit   defined in VNA GUI
+        """
         
         if 'channel' in kwargs:
             self.channel(kwargs.get('channel'))
@@ -78,7 +106,10 @@ class VNA(object):
             self.average(kwargs.get('average'))
 
         if 'calib_kit' in kwargs:
-            self.calib_kit(kwargs.get('calib_kit', 23))
+            self.calib_kit(kwargs.get('calib_kit'))
+
+        if 'power_level' in kwargs:
+            self.power_level(kwargs.get('power_level'))
 
         return True
 
@@ -92,7 +123,10 @@ class VNA(object):
         return self.itf.read(cmd + self.term)
 
     def freq(self, start=None, stop=None):
-        """
+        """ Set start and stop frequency in MHz
+            If no parameters provided, this method returns current frequency
+
+        The corresponding SCPI commands are:
         SENSe<Ch>:FREQuency:STARt <frequency>
         SENSe<Ch>:FREQuency:STOP <frequency>
         """
@@ -111,18 +145,24 @@ class VNA(object):
         if start is None and stop is None:
             start = self.read('SENS1:FREQ:STAR?').strip()
             stop = self.read('SENS1:FREQ:STOP?').strip()
-        return int(start),int(stop)
+            return float(start),float(stop)
 
-    def ifbw(self, res=1000):
-        """
+    def ifbw(self, res=None):
+        """ Set IF bandwidth resolution
+            if no parameter provided, this returns current ifbw resolution
+
+        The corresponding SCPI command is:
         SENSe<Ch>:BWIDth[:RESolution] <frequency>
-        In steps of 10, 30, 100, 300, 1000, 3000, 10000, 30000
+        available options are:
+            10, 30, 100, 300, 1000, 3000, 10000, 30000
         """
         STEP = [1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 30000]
-        assert isinstance(res, int) and res in range(1,30001)
-        assert any([res % step == 0 for step in STEP if res >= step])
-        self.write('SENS1:BWID {} HZ'.format(res))
-        self.logger.debug('Set IF bandwidth to {}'.format(res))
+        if res:
+            assert res in STEP
+            self.write('SENS1:BWID {} HZ'.format(res))
+            self.logger.debug('Set IF bandwidth to {}'.format(res))
+        else:
+            self.read('SENS1:BWID?')
 
     def channel(self, ch=1):
         """
@@ -141,16 +181,24 @@ class VNA(object):
         self.logger.debug('Calibration kit #{} selected'.format(kit))
 
     def calib(self, std=None, **kwargs):
-        """
-        SENSe<Ch>:CORRection:COLLect[:ACQuire]:OPEN <port>
-        SENSe<Ch>:CORRection:COLLect[:ACQuire]:SHORt <port>
-        SENSe<Ch>:CORRection:COLLect[:ACQuire]:LOAD <port>
-        SENSe<Ch>:CORRection:COLLect[:ACQuire]:THRU <rcvport>, <srcport>
+        """ Calculate calibration data and apply
+
+        E.g.
+        calib('open')   switch to open standard and calculate
+        calib('short')  switch to short standard and calculate
+        calib('load')   switch to load standard and calculate
+        calib('apply')  Apply calibration data
 
         SENSe<Ch>:CORRection:COLLect:METHod[:RESPonse]:OPEN <port>
         SENSe<Ch>:CORRection:COLLect:METHod[:RESPonse]:SHORt <port>
         SENSe<Ch>:CORRection:COLLect:METHod[:RESPonse]:LOAD <port>
         SENSe<Ch>:CORRection:COLLect:METHod:ERESponse <rcvport>, <srcport>
+
+        SENSe<Ch>:CORRection:COLLect[:ACQuire]:OPEN <port>
+        SENSe<Ch>:CORRection:COLLect[:ACQuire]:SHORt <port>
+        SENSe<Ch>:CORRection:COLLect[:ACQuire]:LOAD <port>
+        SENSe<Ch>:CORRection:COLLect[:ACQuire]:THRU <rcvport>, <srcport>
+
         SENSe<Ch>:CORRection:COLLect:METHod:SOLT1 <port>
         SENSe<Ch>:CORRection:COLLect:METHod:TYPE?
         SENSe<Ch>:CORRection:STATe {ON|OFF|1|0}
@@ -205,7 +253,7 @@ class VNA(object):
         else:
             self.logger.warn('calibration standard {} not implemented'.format(std))
 
-    def state_save(self, filename, stype='CSTate'):
+    def state_save(self, filename, **kwargs):
         """
         MMEMory:STORe:STYPe {STATe|CSTate|DSTate|CDSTate}
             STATe       Measurement conditions
@@ -216,6 +264,9 @@ class VNA(object):
 
         MMEMory:STORe[:STATe] <string>
         """
+
+        stype = kwargs.get('stype','CSTate')
+
         STYPE = ['state', 'cstate', 'dstate', 'cdstate',]
         assert stype.lower() in STYPE
 
@@ -244,8 +295,10 @@ class VNA(object):
         self.write('DISP:WIND1:TRAC2:Y:RPOS 1') #Move S21 up
         self.write('SENS1:SWE:POIN {}'.format(res))  #Number of points
 
-    def snp_save(self, name, fmt='ri'):
-        """
+    def snp_save(self, name, **kwargs):
+        """ Save measurement in touchstone file
+            fmt     save format
+                    
         MMEMory:STORe:SNP:FORMat {RI|DB|MA}
             " MA" Logarithmic Magnitude / Angle format
             " DB" Linear Magnitude / Angle format
@@ -258,6 +311,8 @@ class VNA(object):
             S22. 2-port type file saves all the four parameters: S11, S21, S12,
             S22. (no query)
         """
+
+        fmt = kwargs.get('fmt','ri')
 
         FORMAT = ['ri','db','ma']
         assert fmt.lower() in FORMAT
@@ -394,7 +449,7 @@ class VNA(object):
         STYPE = ['linear','logarithmic','segment','power','vvm']
         if spoints == None and stime == None and stype == None:
             spoints = int(self.read('SENS1:SWE:POIN?'))
-            stime = int(self.read('SENS1:SWE:POIN:TIME?'))
+            stime = float(self.read('SENS1:SWE:POIN:TIME?'))
             stype = self.read('SENS1:SWE:TYPE?')
             return {'points':spoints,'time':stime,'type':stype}
         else:
@@ -404,7 +459,7 @@ class VNA(object):
             if isinstance(stime, int):
                 self.write('SENS1:SWE:POIN:TIME {}'.format(stime))
                 self.logger.debug('Set sweep time to {} second(s)'.format(stime))
-            if stype.lower() in STYPE:
+            if isinstance(stype, str) and stype.lower() in STYPE:
                 self.write('SENS1:SWE:TYPE {}'.format(stype))
                 self.logger.debug('Set sweep type to {} '.format(stype))
 

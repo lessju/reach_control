@@ -55,8 +55,6 @@ class Microcontroller:
 
     def gpio(self, pin, val=None, **kwargs):
 
-        check = kwargs.get('check', False)
-
         if val==None:
             ret = self.get('gpio {}'.format(pin)).strip()
             try:
@@ -70,7 +68,6 @@ class Microcontroller:
     def gpios(self, pins, vals=None, **kwargs):
 
         default = kwargs.get('default', 0)
-        check = kwargs.get('check', True)
 
         if vals==None:
             ret = []

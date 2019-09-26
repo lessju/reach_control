@@ -26,13 +26,15 @@ if __name__ == '__main__':
     logger = logging.getLogger('REACH')
     
     def vna_init(**kwargs):
+        """ Initialize VNA
+            It creates a VNA instance if it does not exist
+            Please refer to reach_ctrl.vna for parameter details
+        """
         # check if the instance exists
         if kwargs['name'] not in dict_inst:
-    
             # create a spec instance
             from reach_ctrl.vna import SCPIInterface, VNA
             tr = VNA(SCPIInterface(), **kwargs)
-    
             # add instance into dictionary
             dict_inst[kwargs['name']] = tr
     
@@ -45,6 +47,10 @@ if __name__ == '__main__':
             logger.warn('VNA ' + kwargs['name'] + ' initialization failed.')
     
     def uc_init(**kwargs):
+        """ Initialize Microcontroller
+            It creates a microcontroller instance if it does not exist
+            Please refer to reach_ctrl.uctrl for parameter details
+        """
 
         # check if the instance exists
         if kwargs['name'] not in dict_inst:
@@ -61,40 +67,85 @@ if __name__ == '__main__':
         uc = dict_inst[kwargs['name']]
     
         # initialization
-        if uc.init(**kwargs):
-            logger.info('Microcontroller ' + kwargs['name'] + ' initialization done.')
-        else:
+        if not uc.init(**kwargs):
             logger.warn('Microcontroller ' + kwargs['name'] + ' initialization failed.')
-    
+
+        logger.info('Microcontroller ' + kwargs['name'] + ' initialization done.')
+
+    def switch(**kwargs):
+        """ switching
+            relay       the name of the relay in big letter
+            sw          the name of the switch in big letter
+            position    integer
+        """
+        SWITCH = {
+                    'MS1':range(24,32),
+                    'MS2':range(33,39),
+                    'MS3':[],
+                    'MS4':[],
+                    'MTS':None, # replace None with a gpio pin number
+                }
+        uc = dict_inst[kwargs['name']]
+        pos = kwargs['position']
+        relay = kwargs['relay']
+
+        if len(SWITCH[relay]) == 1:
+            uc.gpio(SWITCH[relay], pos)
+        else: # greater than 1
+            val = [0] * len(SWITCH[relay])
+            val[int(pos)-1] = 1
+            uc.gpios(SWITCH[relay], val)
+
     def calibration(**kwargs):
 
-        # TODO list
+        # This is just an example, a complete implementation subject to
+        # a detailed calibration procedure
 
-        # uctrl choose calibration std
-        # vna calculate calibration data
-        # uctrl choose calibration std
-        # vna calculate calibration data
-        # uctrl choose calibration std
-        # vna calculate calibration data
+        vna = kwargs.get('name')
+        vna_h = dict_inst[vna]
+        uc_h = dict_inst[uc]
+        
+        # calibration std 'open'
+        for sw in kwargs['open']:
+            switch(sw['switch'])
+        vna_h.calib('open')
+        vna_h.wait() # calib takes a couple of seconds. use wait to sync
+
+        # calibration std 'short'
+        for sw in kwargs['short']:
+            switch(sw['switch'])
+        vna_h.calib('short')
+        vna_h.wait()
+
+        # calibration std 'load'
+        for sw in kwargs['load']:
+            switch(sw['switch'])
+        vna_h.calib('load')
+        vna_h.wait()
+
         # vna apply calibration data
+        vna_h.calib('apply')
+        logger.info('Calibration done.')
 
-        logger.info('VNA calibration done')
+    def calib_save(**kwargs):
+        fname = vna + time.strftime(kwargs['file_name_fmt'], time.localtime())
+        vna_h.state_save(fname, kwargs)
+        logger.info('Save system state and calibration data in file ' + fname)
     
-    def signal_select(**kwargs):
+    def vna_measure(**kwargs):
+        for sw in kwargs['source']:
+            switch(sw['switch'])
+        fname = vna + time.strftime(kwargs['file_name_fmt'], time.localtime())
+        vna_h.snp_save(fname, kwargs)
+        logger.info('Save S parameter measurement in file ' + fname)
 
-        # switch signal
-
-        logger.info('Signal switching done')
-    
     def spec_init(**kwargs):
     
         # check if the instance exists
         if kwargs['name'] not in dict_inst:
-    
             # create a spec instance
             from reach_ctrl.spectrometer import Spectrometer
             spec = Spectrometer(**kwargs)
-    
             # add instance into dictionary
             dict_inst[kwargs['name']] = spec
     
@@ -102,13 +153,15 @@ if __name__ == '__main__':
     
         # programming
         spec.prog(**kwargs)
-    
         # setting parameters
         spec.init(**kwargs)
 
         logger.info('Spectrometer ' + kwargs['name'] + ' initialization done.')
     
     def spec_measure(**kwargs):
+
+        for sw in kwargs['source']:
+            switch(sw['switch'])
 
         # check if the instance exists
         spec = dict_inst[kwargs['name']]
@@ -121,13 +174,23 @@ if __name__ == '__main__':
 
         # save file
         path = kwargs.get('path','./')
-        timestamp = time.strftime("%Y-%m-%d_%H:%M:%S", time.localtime())
-        filename = path + kwargs['name'] + '_' + timestamp + '.txt'
-        np.savetxt(filename, data)
+        t = time.strftime(kwargs['file_name_fmt'], time.localtime())
+        fname = spec + t + '.txt'
+        np.savetxt(fname, data)
 
-        logger.info('spectrum saved in ' + filename)
+        logger.info('spectrum saved in ' + fname)
 
     def test(**kwargs):
+        logger.info('test test')
+
+    def power(**kwargs):
+        uc = dict_inst[kwargs['name']]
+        if '5v' in kwargs:
+            uc.gpio(21, kwargs['5v']) 
+        if '12v' in kwargs:
+            uc.gpio(22, kwargs['12v']) 
+        if '24v' in kwargs:
+            uc.gpio(23, kwargs['24v']) 
         logger.info('test test')
     
     if args.config:
@@ -164,12 +227,18 @@ if __name__ == '__main__':
             vna_init(**params)
         elif op == 'init_uc':
             uc_init(**params)
-        elif op == 'measure':
+        elif op == 'measure_spec':
             spec_measure(**params)
         elif op == 'calib':
             calibration(**params)
+        elif op == 'save_calib':
+            calib_save(**params)
         elif op == 'switch':
-            signal_select(**params)
+            switch(**params)
+        elif op == 'measure_s':
+            vna_measure(**params)
+        elif op == 'power':
+            power(**params)
         elif op == 'test':
             test(**params)
         else:
