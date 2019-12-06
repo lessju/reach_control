@@ -7,7 +7,8 @@ import logging
 import numpy as np
 import argparse
 import serial
-from reach_ctrl import uctrl, vna
+
+from reach_ctrl import microcontroller, vna
 
 
 if __name__ == '__main__':
@@ -30,18 +31,17 @@ if __name__ == '__main__':
             It creates a VNA instance if it does not exist
             Please refer to reach_ctrl.vna for parameter details
         """
-        # check if the instance exists
+        # If instance does not already exist, create a VNA instance and save it to the dictionary
         if kwargs['name'] not in dict_inst:
-            # create a spec instance
-            from reach_ctrl.vna import SCPIInterface, VNA
-            tr = VNA(SCPIInterface(), **kwargs)
-            # add instance into dictionary
+            tr = vna.VNA()
             dict_inst[kwargs['name']] = tr
     
         tr = dict_inst[kwargs['name']]
     
         # initialization
-        if tr.init(**kwargs):
+        
+        if tr.init(kwargs['channel'], kwargs['freqstart'], kwargs['freqstop'], kwargs['ifbw'], 
+                   kwargs['average'], kwargs['calib_kit'], kwargs['power_level']):
             logger.info('VNA ' + kwargs['name'] + ' initialization done.')
         else:
             logger.warn('VNA ' + kwargs['name'] + ' initialization failed.')
@@ -51,17 +51,9 @@ if __name__ == '__main__':
             It creates a microcontroller instance if it does not exist
             Please refer to reach_ctrl.uctrl for parameter details
         """
-
-        # check if the instance exists
+        # If microcontroller instance does not exist, create it and add it to dictionary
         if kwargs['name'] not in dict_inst:
-    
-            # create a spec instance
-            import serial
-            from reach_ctrl.uctrl import Microcontroller
-            ser = serial.Serial(kwargs['port'],kwargs['baudrate'])
-            uc = Microcontroller(ser, **kwargs)
-    
-            # add instance into dictionary
+            uc = microcontroller.Microcontroller(kwargs['port'], kwargs['baudrate'])
             dict_inst[kwargs['name']] = uc
     
         uc = dict_inst[kwargs['name']]
@@ -69,8 +61,8 @@ if __name__ == '__main__':
         # initialization
         if not uc.init(**kwargs):
             logger.warn('Microcontroller ' + kwargs['name'] + ' initialization failed.')
-
-        logger.info('Microcontroller ' + kwargs['name'] + ' initialization done.')
+        else:
+            logger.info('Microcontroller ' + kwargs['name'] + ' initialization done.')
 
     def switch(**kwargs):
         """ switching
@@ -243,9 +235,3 @@ if __name__ == '__main__':
             test(**params)
         else:
             logger.warn('Operation {} not implemented'.format(op))
-
-
-
-
-
-

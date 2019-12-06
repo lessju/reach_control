@@ -1,81 +1,23 @@
+import numpy as np
 import logging
 import time
-import numpy as np
 
-class SCPIInterface(object):
-
-    def __init__(self, **kwargs):
-        """ SCPI-1999 for Copper Mountain VNA
-            Please ensure that you run VNA GUI and enable TCP interface
-            before instantiate this class
-
-            ip          default value is localhost
-            port        default value is 5025
-            term        termination. default value is LF (Line Feed)
-
-            Please refer to the link below for a full list of commands
-            https://coppermountaintech.com/wp-content/uploads/2019/08/TRVNA_Programming_Manual_SCPI.pdf
-        """
-
-        self.ip = kwargs.get('ip', 'localhost')
-        self.port = kwargs.get('port', '5025')
-
-        self.logger = kwargs.get('logger', logging.getLogger(__name__))
-        self.term = kwargs.get('term', '\n')
-        self.timeout = kwargs.get('timeout', 100000)
-
-        import visa
-        rm = visa.ResourceManager()
-        #Connect to a Socket on the local machine at 5025
-        #Use the IP address of a remote machine to connect to it instead
-        try:
-            self.CMT = rm.open_resource('TCPIP0::{}::{}::SOCKET'.format(self.ip,self.port))
-        except Exception as e:
-            self.logger.critical('Cannot establish SCPI connection!',exc_info=True)
-
-        #The VNA ends each line with this. Reads will time out without this
-        self.CMT.read_termination = self.term
-
-        #Set a really long timeout period for slow sweeps
-        self.CMT.timeout = self.timeout
-
-    def write(self, msg, **kwargs):
-        """ Send a message through SCPI
-            A termination is appended for each message
-        """
-
-        assert msg.endswith(self.term), \
-            '{}\nMissing read_termination in write message'.format(msg)
-
-        val = kwargs.get('values', [])
-
-        self.CMT.write_ascii_values(msg, val)
-
-
-    def read(self, msg):
-        """ Read value or state through SCPI
-        """
-
-        assert msg.endswith(self.term), \
-            '{}\nMissing read_termination in read message'.format(msg)
-
-        return self.CMT.query(msg)
-
-
+from reach_ctrl.scpi_interface import SCPIInterface
 
 class VNA(object):
 
-    def __init__(self, interface, **kwargs):
+    def __init__(self, term="\n"):
         """ Tested on Copper Mountain VNA TR1300/1
             interface       SCPIInterface
             term
         """
+        # Create VISA interface
+        self.itf = SCPIInterface()
 
-        self.itf = interface
-        self.logger = kwargs.get('logger', logging.getLogger(__name__))
-        self.term = kwargs.get('term', '\n')
+        # Set termination symbol
+        self.term = term
 
-    def init(self, **kwargs):
+    def init(self, channel=1, freqstart=40, freqstop=180, ifbw=1000, average=20, calib_kit=23, power_level=-5):
         """ VNA Initialization
 
             Possible options are:
@@ -88,31 +30,15 @@ class VNA(object):
             calib_kit   defined in VNA GUI
         """
         
-        if 'channel' in kwargs:
-            self.channel(kwargs.get('channel'))
-
-        # Set frequency range
-        if 'freqstart' in kwargs:
-            self.freq(start=kwargs.get('freqstart'))
-
-        if 'freqstop' in kwargs:
-            self.freq(stop=kwargs.get('freqstop'))
-
-        # Set IF bandwidth
-        if 'ifbw' in kwargs:
-            self.ifbw(kwargs.get('ifbw'))
-
-        if 'average' in kwargs:
-            self.average(kwargs.get('average'))
-
-        if 'calib_kit' in kwargs:
-            self.calib_kit(kwargs.get('calib_kit'))
-
-        if 'power_level' in kwargs:
-            self.power_level(kwargs.get('power_level'))
+        # Set parameters
+        self.channel(channel)
+        self.freq(start=freqstart, stop=freqstop)
+        self.ifbw(ifbw)
+        self.average(average)
+        self.calib_kit(calib_kit)
+        self.power_level(power_level)
 
         return True
-
 
     def write(self, cmd):
         assert isinstance(cmd, str)
@@ -137,15 +63,15 @@ class VNA(object):
 
         if isinstance(start, int):
             self.write('SENS1:FREQ:STAR {} MHZ'.format(start))
-            self.logger.debug('Set start frequency to {} MHz'.format(start))
+            logging.debug('Set start frequency to {} MHz'.format(start))
         if isinstance(start, int):
             self.write('SENS1:FREQ:STOP {} MHZ'.format(stop))
-            self.logger.debug('Set stop frequency to {} MHz'.format(stop))
+            logging.debug('Set stop frequency to {} MHz'.format(stop))
 
         if start is None and stop is None:
             start = self.read('SENS1:FREQ:STAR?').strip()
             stop = self.read('SENS1:FREQ:STOP?').strip()
-            return float(start),float(stop)
+            return (float(start), float(stop))
 
     def ifbw(self, res=None):
         """ Set IF bandwidth resolution
@@ -160,7 +86,7 @@ class VNA(object):
         if res:
             assert res in STEP
             self.write('SENS1:BWID {} HZ'.format(res))
-            self.logger.debug('Set IF bandwidth to {}'.format(res))
+            logging.debug('Set IF bandwidth to {}'.format(res))
         else:
             self.read('SENS1:BWID?')
 
@@ -178,9 +104,9 @@ class VNA(object):
         MMEMory:LOAD:CKIT<Ck> <string>
         """
         self.write('SENS1:CORR:COLL:CKIT {}'.format(kit))
-        self.logger.debug('Calibration kit #{} selected'.format(kit))
+        logging.debug('Calibration kit #{} selected'.format(kit))
 
-    def calib(self, std=None, **kwargs):
+    def calib(self, std=None, port=1, source_port=1, receive_port=2):
         """ Calculate calibration data and apply
 
         E.g.
@@ -221,9 +147,8 @@ class VNA(object):
             'databased', #(data-based)
         ]
 
-        port = kwargs.get('port', 1)
-        srcport = kwargs.get('srcport', 1)
-        rcvport = kwargs.get('rcvport', 2)
+        srcport = source_port
+        rcvport = receive_port
 
         std = std.lower()
         assert std in STD
@@ -232,28 +157,33 @@ class VNA(object):
             port = '{},{}'.format(rcvport, srcport)
 
         if std in ['open', 'short', 'load',]:
-            self.logger.debug('Select calibration standard {}'.format(std))
+            logging.debug('Select calibration standard {}'.format(std))
             self.write('SENS1:CORR:COLL:METH:{} {}'.format(std, port))
-            self.logger.debug('Measure under calibration standard {}'.format(std))
+            logging.debug('Measure under calibration standard {}'.format(std))
             self.write('SENS1:CORR:COLL:{} {}'.format(std, port))
+
         elif std == 'thru':
-            self.logger.debug('Select calibration standard {}'.format(std))
+            logging.debug('Select calibration standard {}'.format(std))
             self.write('SENS1:CORR:COLL:METH:{} {}'.format('ERES', port))
-            self.logger.debug('Measure under calibration standard {}'.format(std))
+            logging.debug('Measure under calibration standard {}'.format(std))
             self.write('SENS1:CORR:COLL:{} {}'.format(std, port))
+
         elif std in ['on','off']:
-            self.logger.debug('Switch {} calibration'.format(std))
+            logging.debug('Switch {} calibration'.format(std))
             self.write('SENS1:CORR:COLL:STAT {}'.format(std))
+
         elif std == 'apply':
-            self.logger.debug('Apply calibration data')
+            logging.debug('Apply calibration data')
             self.write('SENS1:CORR:COLL:SAVE')
+
         elif std == None:
             ret = self.read('SENS1:CORR:STAT?').strip()
             return int(ret)
-        else:
-            self.logger.warn('calibration standard {} not implemented'.format(std))
 
-    def state_save(self, filename, **kwargs):
+        else:
+            logging.warn('calibration standard {} not implemented'.format(std))
+
+    def state_save(self, filename, stype="CSTate"):
         """
         MMEMory:STORe:STYPe {STATe|CSTate|DSTate|CDSTate}
             STATe       Measurement conditions
@@ -265,21 +195,20 @@ class VNA(object):
         MMEMory:STORe[:STATe] <string>
         """
 
-        stype = kwargs.get('stype','CSTate')
 
         STYPE = ['state', 'cstate', 'dstate', 'cdstate',]
         assert stype.lower() in STYPE
 
         self.write('MMEM:STOR:STYP {}'.format(stype))
         self.write('MMEM:STOR "{}"'.format(filename))
-        self.logger.debug('Save system state of type {} to file {}'.format(stype, filename))
+        logging.debug('Save system state of type {} to file {}'.format(stype, filename))
 
     def state_recall(self, filename):
         """
         MMEMory:LOAD[:STATe] <string>
         """
-        self.write('MMEM:LOAD {}'.format(filename))
-        self.logger.debug('Load system state from file {}'.format(filename))
+        self.write('gMMEM:LOAD {}'.format(filename))
+        loggin.debug('Load system state from file {}'.format(filename))
         
 
     def trace(self, s11='MLOG', s21='MLOG', res=1001):
@@ -295,7 +224,7 @@ class VNA(object):
         self.write('DISP:WIND1:TRAC2:Y:RPOS 1') #Move S21 up
         self.write('SENS1:SWE:POIN {}'.format(res))  #Number of points
 
-    def snp_save(self, name, **kwargs):
+    def snp_save(self, name, save_format="ri"):
         """ Save measurement in touchstone file
             fmt     save format
                     
@@ -312,15 +241,13 @@ class VNA(object):
             S22. (no query)
         """
 
-        fmt = kwargs.get('fmt','ri')
-
         FORMAT = ['ri','db','ma']
-        assert fmt.lower() in FORMAT
+        assert save_format.lower() in FORMAT
 
         self.write('MMEM:STOR:SNP:TYPE:S2P 1,2') # not mentioned in manual
-        self.write('MMEM:STOR:SNP:FORM {}'.format(fmt))
+        self.write('MMEM:STOR:SNP:FORM {}'.format(save_format))
         self.write('MMEM:STOR:SNP "{}"'.format(name))
-        self.logger.debug('Save touchstone file in {} format at {}'.format(fmt,name))
+        logging.debug('Save touchstone file in {} format at {}'.format(save_format, name))
 
     def power_level(self, dbm=None):
         """
@@ -337,7 +264,7 @@ class VNA(object):
         elif dbm <=3 and dbm >=-55:
             mydbm = myround(dbm)
             self.write('SOUR1:POW {}'.format(mydbm))
-            self.logger.debug('Set power level to {}'.format(mydbm))
+            logging.debug('Set power level to {}'.format(mydbm))
         else:
             raise ValueError('Invalid parameter')
 
@@ -350,9 +277,9 @@ class VNA(object):
         if slope == None:
             return self.read('SOUR1:POW:SLOP?') #Get data as string
         elif dbm <=3 and dbm >=-55:
-            myslope = round(slope,1)
+            myslope = round(slope, 1)
             self.write('SOUR1:POW:SLOP {}'.format(myslope))
-            self.logger.debug('Set power slope to {}'.format(myslope))
+            logging.debug('Set power slope to {}'.format(myslope))
         else:
             raise ValueError('Invalid parameter')
 
@@ -365,7 +292,7 @@ class VNA(object):
             return self.read('SENS1:FREQuency?') #Get data as string
         elif freq in range(3e5, 1.3e9+1):
             self.write('SENS1:FREQ {}'.format(freq))
-            self.logger.debug('Set power frequency to {}'.format(freq))
+            logging.debug('Set power frequency to {}'.format(freq))
         else:
             raise ValueError('Invalid parameter')
 
@@ -377,10 +304,10 @@ class VNA(object):
             return self.read('OUTP?') #Get data as string
         elif enable:
             self.write('OUTP 1')
-            self.logger.debug('Enable power output')
+            logging.debug('Enable power output')
         elif not enable:
             self.write('OUTP 0')
-            self.logger.debug('Disable power output')
+            logging.debug('Disable power output')
         else:
             raise ValueError('Invalid parameter')
 
@@ -430,11 +357,11 @@ class VNA(object):
         else:
             if cnt == 0:
                 self.write('SENS1:AVER 0')
-                self.logger.debug('Disable average')
+                logging.debug('Disable average')
             else:
                 self.write('SENS1:AVER 1')
                 self.write('SENS1:AVER:COUN {}'.format(cnt))
-                self.logger.debug('Set average to {}'.format(cnt))
+                logging.debug('Set average to {}'.format(cnt))
 
     def sweep(self, spoints=None, stime=None, stype=None):
         """
@@ -455,11 +382,11 @@ class VNA(object):
         else:
             if isinstance(spoints, int):
                 self.write('SENS1:SWE:POIN {}'.format(spoints))
-                self.logger.debug('Set sweep points to {}'.format(spoints))
+                logging.debug('Set sweep points to {}'.format(spoints))
             if isinstance(stime, int):
                 self.write('SENS1:SWE:POIN:TIME {}'.format(stime))
-                self.logger.debug('Set sweep time to {} second(s)'.format(stime))
+                logging.debug('Set sweep time to {} second(s)'.format(stime))
             if isinstance(stype, str) and stype.lower() in STYPE:
                 self.write('SENS1:SWE:TYPE {}'.format(stype))
-                self.logger.debug('Set sweep type to {} '.format(stype))
+                logging.debug('Set sweep type to {} '.format(stype))
 
