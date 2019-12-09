@@ -1,0 +1,111 @@
+# GPIO pin mappings to microcontroller must ba added here
+
+switches:
+    MTS:
+        name: MTS
+    MS1:
+        name: MS1
+    MS2:
+        name: MS2
+    MS3:
+        name: MS3
+    MS4:
+        name: MS4
+
+sources:
+    antenna:
+        - switch:
+              name: MS1
+              position: 1  
+    cold:
+        - switch:
+              name: MS1
+              position: 2
+    noise_source:
+        - switch:
+              name: MS1
+              position: 3
+    thermal_noise:
+        - switch:
+              name: MS1
+              position: 4
+    25_ohm:
+        - switch:
+              name: MS1
+              position: 5
+    100_ohm:
+        - switch:
+              name: MS1
+              position: 6
+    5_ohm:
+        - switch:
+              name: MS1
+              position: 7
+        - switch:
+              name: MS3
+              position: 1
+    500_ohm:
+        - switch:
+              name: MS1
+              position: 7
+        - switch:
+              name: MS3
+              position: 2
+    31_ohm:
+        - switch:
+              name: MS1
+              position: 7
+        - switch:
+              name: MS3
+              position: 3
+    81_ohm:
+        - switch:
+              name: MS1
+              position: 7
+        - switch:
+              name: MS3
+              position: 4
+    short:
+        - switch:
+              name: MS1
+              position: 8
+        - switch:
+              name: MS4
+              position: 1
+    open:
+        - switch:
+              name: MS1
+              position: 8
+        - switch:
+              name: MS4
+              position: 2
+    28_ohm:
+        - switch:
+              name: MS1
+              position: 8
+        - switch:
+              name: MS4
+              position: 3
+    89_ohm:
+        - switch:
+              name: MS1
+              position: 8
+        - switch:
+              name: MS4
+              position: 4
+    vna_short:
+        - switch:
+              name: MS6
+              position: 3
+    vna_open:
+        - switch:
+              name: MS6
+              position: 4
+    vna_load:
+        - switch:
+              name: MS6
+              position: 5
+    vna_test:
+        - switch:
+              name: MS6
+              position: 6

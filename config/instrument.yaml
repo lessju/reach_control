@@ -1,0 +1,28 @@
+# Note that the REACH_CONFIG environmental path needs to be defined
+
+# VNA parameters
+vna:
+    name: vna0
+    channel: 1
+    freqstart: 40
+    freqstop: 180
+    ifbw: 1000
+    average: 20
+    calib_kit: 23
+    power_level: -5
+
+# TPM parameters
+spectrometer:
+    name: tpm
+    ip: 10.0.10.3
+    port: 10000
+    lmc_ip: 10.0.10.40
+    lmc_port: 4660
+    bitstream: itpm_v1_1_tpm_reach_wrap_v11.bit
+    channel_truncation: 1
+    ada_gain: 15
+    channel_truncation: 2
+
+# uController parameters
+ucontroller:
+    name: uctrl

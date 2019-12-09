@@ -5,7 +5,9 @@ import logging
 import time
 import os
 
-from tile_reach import Tile
+from reach_ctrl.spectrometer.tile_reach import Tile
+from reach_ctrl.spectrometer.spectra import Spectra
+from reach_ctrl.reach_config import REACHConfig
 
 __author__ = 'Alessio Magro'                     
 
@@ -16,6 +18,10 @@ class Spectrometer:
 
         # Create Tile
         self._tile = Tile(ip=ip, port=port, lmc_ip=lmc_ip, lmc_port=lmc_port, sampling_rate=sampling_rate)
+
+        # Create and initialise receiver
+        self._spectra = Spectra(ip=lmc_ip, port=lmc_port)
+        self._spectra.initialise()
 
     def connect(self):
         """ Connect to TPM """
@@ -64,7 +70,6 @@ class Spectrometer:
 
         # Perform synchronisation
         self._tile.post_synchronisation()
-
         self._tile.synchronize_ddc(1600)
 
         logging.info("Setting data acquisition")
@@ -73,9 +78,25 @@ class Spectrometer:
         self._tile.load_default_poly_coeffs()
         self._tile['fpga1.dsp_regfile.channelizer_fft_bit_round'] = 0xFFFF
         self._tile['fpga2.dsp_regfile.channelizer_fft_bit_round'] = 0xFFFF
-
         self._tile['board.regfile.ethernet_pause'] = 8000
 
+    def acquire_sectrum(self, nof_seconds=1):
+        """ Acquire spectra for defined number of seconds """
+
+        # Start receiver
+        self._spectra.start_receiver(nof_seconds)
+
+        # Start data transmission
+        # ...
+
+        # Wait for receiver to finish
+        spectra = self._spectra.stop_receiver()
+
+        # Stop data transmission 
+        # ...
+
+        # Return spectra
+        return spectra
 
 if __name__ == "__main__":
 
@@ -84,14 +105,6 @@ if __name__ == "__main__":
     from sys import argv, stdout
 
     parser = OptionParser(usage="usage: %spectrometr [options]")
-    parser.add_option("--ip", action="store", dest="ip",
-                      default="10.0.10.2", help="IP [default: 10.0.10.2]")
-    parser.add_option("--port", action="store", dest="port",
-                      type="int", default="10000", help="Port [default: 10000]")
-    parser.add_option("--lmc_ip", action="store", dest="lmc_ip",
-                      default="10.0.10.200", help="IP [default: 10.0.10.200]")
-    parser.add_option("--lmc_port", action="store", dest="lmc_port",
-                      type="int", default="4660", help="Port [default: 4660]")
     parser.add_option("-f", "--bitfile", action="store", dest="bitfile",
                       default=None, help="Bitfile to use (-P still required)")
     parser.add_option("-P", "--program", action="store_true", dest="program",
@@ -100,46 +113,27 @@ if __name__ == "__main__":
                       default=False, help="Program CPLD (cannot be used with other options) [default: False]")
     parser.add_option("-I", "--initialise", action="store_true", dest="initialise",
                       default=False, help="Initialise TPM [default: False]")
-    parser.add_option("", "--channel-integration-time", action="store", dest="channel_integ",
-                      type="float", default=1, help="Integrated channel integration time [default: -1 (disabled)]")
-    parser.add_option("--ada-gain", action="store", dest="ada_gain",
-                      default=None, type="int", help="ADA gain [default: 15]")
-    parser.add_option("--chan-trunc-scale", action="store", dest="chan_trun",
-                      default=2, type="int", help="Channelsier truncation scale [range: 0-7, default: 2]")
-    (conf, args) = parser.parse_args(argv[1:])
+    (command_line_args, args) = parser.parse_args(argv[1:])
 
-    # Set logging
-    log = logging.getLogger('')
-    log.setLevel(logging.INFO)
-    line_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    ch = logging.StreamHandler(stdout)
-    ch.setFormatter(line_format)
-    log.addHandler(ch)
+    # Initialise REACH config
+    conf = REACHConfig()['spectrometer']
     
     # Create tile instance
-    tile = Spectrometer(conf.ip, conf.port, conf.lmc_ip, conf.lmc_port)
+    tile = Spectrometer(conf['ip'], int(conf['port']), conf['lmc_ip'], int(conf['lmc_port']))
 
     # Program CPLD
-    if conf.program_cpld:
-        if conf.bitfile is not None:
-            tile.program_cpld(conf.bitfile)
-            exit()
-        else:
-            logging.error("No CPLD bitfile specified")
-            exit(-1)
+    if command_line_args.program_cpld:
+        logging.info("Programming CPLD")
+        tile.program_cpld(os.path.join(os.path.expanduser(os.environ['REACH_CONFIG_DIRECTORY']), conf['bitstream']))
 
     # Program FPGAs if required
-    if conf.program:
+    if command_line_args.program:
         logging.info("Programming FPGAs")
-        if conf.bitfile is not None:
-           tile.program(conf.bitfile)
-        else:
-            logging.error("No bitfile specified")
-            exit(-1)
-
+        tile.program(os.path.join(os.path.expanduser(os.environ['REACH_CONFIG_DIRECTORY']), conf['bitstream']))
+        
     # Initialise TPM if required
-    if conf.initialise:
-        tile.initialise(conf.chan_trun, conf.channel_integ, conf.ada_gain)
+    if command_line_args.initialise:
+        tile.initialise(int(conf['channel_truncation']), int(conf['channel_truncation']), int(conf['ada_gain']))
 
     # Connect to board
     tile.connect()

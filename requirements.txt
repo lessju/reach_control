@@ -1,5 +1,4 @@
 pyvisa
 pyvisa-py
-Pyserial
-casperfpga
+pyserial
 pyyaml

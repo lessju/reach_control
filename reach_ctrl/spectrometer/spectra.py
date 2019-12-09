@@ -1,4 +1,5 @@
 import numpy as np
+import threading
 import logging
 import socket
 import struct
@@ -19,9 +20,6 @@ class Spectra:
 
         # Create socket reference
         self._socket = None
-
-        # Flag to stop received
-        self._stop_receiver = False
 
         # Spectra containers
         self._data_reassembled = np.zeros((2, 2 * self._nof_channels), dtype=np.uint64)
@@ -50,6 +48,10 @@ class Spectra:
         self._received_packets = 0
         self._previous_timestamp = 0
 
+        # Received spectra placeholder
+        self._receiver_thread = None
+        self._received_spectra = None
+
 
     def initialise(self):
         """ Initilise socket and set local buffers """
@@ -60,7 +62,9 @@ class Spectra:
 
     def receive_spectrum(self):
         """ Wait for a spead packet to arrive """
-        
+                
+        # Clear receiver 
+        self._clear_receiver()
         packet = None
 
         # Check if receiver has been initialised
@@ -69,7 +73,7 @@ class Spectra:
             return
 
         # Loop until required to stop
-        while not self._stop_receiver:
+        while True:
             # Try to acquire packet
             try:
                 packet, _ = self._socket.recvfrom(9000)
@@ -89,6 +93,30 @@ class Spectra:
             if self._detect_full_buffer():
                 self._finalise_buffer()
                 return self._data_buffer
+
+    def _receive_spectra_threaded(self, nof_spectra):
+        """ Receive specified number of thread, should run in a separate thread """
+        
+        self._received_spectra = np.zeros((nof_spectra, self._nof_signals, self._nof_channels))
+        for i in range(nof_spectra):
+            self._received_spectra[i] = self.receive_spectrum()
+
+    def start_receiver(self, nof_spectra):
+        """ Receive specified number of spectra """
+
+        # Create and start thread and wait for it to stop
+        self._receiver_thread = threading.Thread(target=self._receive_spectra_threaded, args=(nof_spectra, ))
+        self._receiver_thread.start()
+        
+    def stop_receiver(self):
+        """ Stop receiver """
+        if self._receiver_thread is None:
+            logging.error("Receiver not started")
+        
+        self._receiver_thread.join()
+
+        # Return result
+        return self._received_spectra
 
     def _decode_spead_header(self, packet):
         """ Decode SPEAD packet header 
@@ -173,8 +201,11 @@ class Spectra:
         else:
             return False
 
-    def _clear_buffer(self):
-        """ Reset buffer """
+    def _clear_receiver(self):
+        """ Reset receiver  """
+        self._received_packets = 0
+        self._previous_timestamp = 0
+
         self._data_buffer[:] = 0
         self._data_reassembled[:] = 0
         self._data_buffer_scrambled[:] = 0

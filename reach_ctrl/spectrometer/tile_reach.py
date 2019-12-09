@@ -50,13 +50,6 @@ class Tile(object):
         self._RUNNING = 2
         self._ONCE = 1
         self._STOP = 0
-        self._daq_threads = {}
-
-        # Mapping between preadu and TPM inputs
-        self.fibre_preadu_mapping = {0: 0, 1: 1, 2: 2, 3: 3,
-                                     7: 7, 6: 6, 5: 5, 4: 4,
-                                     8: 8, 9: 9, 10: 10, 11: 11,
-                                     15: 5, 14: 14, 13: 13, 12: 12}
 
     # ---------------------------- Main functions ------------------------------------
 
@@ -129,45 +122,6 @@ class Tile(object):
                 generator.set_tone(0, 72 * self._sampling_rate / 1024, 0.0)
                 generator.enable_prdg(0.4)
                 generator.channel_select(0xFFFF)
-
-        # # Set destination and source IP/MAC/ports for 10G cores
-        # # This will create a loopback between the two FPGAs
-        # ip_octets = self._ip.split('.')
-        # for n in range(8):
-        #     src_ip = "10.{}.{}.{}".format(n + 1, ip_octets[2], ip_octets[3])
-        #     dst_ip = "10.{}.{}.{}".format((1 + n) + (4 if n < 4 else -4), ip_octets[2], ip_octets[3])
-        #     self.configure_10g_core(n,
-        #                             src_mac=0x620000000000 + ip2long(src_ip),
-        #                             dst_mac=0x620000000000 + ip2long(dst_ip),
-        #                             src_ip=src_ip,
-        #                             dst_ip=dst_ip,
-        #                             src_port=0xF0D0,
-        #                             dst_port=4660)
-        #
-        # # wait UDP link up
-        # logging.info("Waiting for 10G link...")
-        # try:
-        #     times = 0
-        #     while True:
-        #         linkup = 1
-        #         for n in [0, 1, 2, 4, 5, 6]:
-        #             core_status = self.tpm.tpm_10g_core[n].get_arp_table_status(0, silent_mode=True)
-        #             if core_status & 0x4 == 0:
-        #                 linkup = 0
-        #         if linkup == 1:
-        #             logging.info("10G Link established! ARP table populated!")
-        #             break
-        #         else:
-        #             times += 1
-        #             time.sleep(0.5)
-        #             if times == 20:
-        #                 logging.warning("10G Links not established after 10 seconds! ARP table not populated!")
-        #                 break
-        # except:
-        #     time.sleep(4)
-        #     self.mii_exec_test(10, False)
-        #     self['fpga1.regfile.eth10g_ctrl'] = 0x0
-        #     self['fpga2.regfile.eth10g_ctrl'] = 0x0
 
     def program_fpgas(self, bitfile):
         """ Program FPGA with specified firmware
@@ -260,71 +214,6 @@ class Tile(object):
         else:
             return 0
 
-    # @connected
-    # def mii_prepare_test(self, board):
-    #     for n in range(8):
-    #         self.tpm.tpm_10g_core[n].mii_test_mac_config(board)
-    #         self.tpm.tpm_10g_core[n].mii_test(10, show_result=False, wait_result=True)
-    #
-    # @connected
-    # def mii_exec_test(self, pkt_num, wait_result=True):
-    #     for n in range(8):
-    #         self.tpm.tpm_10g_core[n].mii_test(pkt_num, show_result=False, wait_result=False)
-    #
-    #     if wait_result:
-    #         self.tpm.tpm_10g_core[7].mii_wait_idle()
-    #
-    #         for n in range(8):
-    #             self.tpm.tpm_10g_core[n].mii_test_result()
-    #
-    # @connected
-    # def mii_test(self, pkt_num, board, wait_result=True):
-    #     self.mii_prepare_test(board)
-    #     self.mii_exec_test(pkt_num, wait_result)
-    #
-    # @connected
-    # def mii_show_result(self):
-    #     for n in range(8):
-    #         self.tpm.tpm_10g_core[n].mii_test_result()
-    #
-    # @connected
-    # def configure_10g_core(self, core_id, src_mac=None, src_ip=None,
-    #                        dst_mac=None, dst_ip=None, src_port=None,
-    #                        dst_port=None):
-    #     """ Configure a 10G core
-    #     :param core_id: 10G core ID
-    #     :param src_mac: Source MAC address
-    #     :param src_ip: Source IP address
-    #     :param dst_mac: Destination MAC address
-    #     :param dst_ip: Destination IP
-    #     :param src_port: Source port
-    #     :param dst_port: Destination port"""
-    #
-    #     # Configure core
-    #     if src_mac is not None:
-    #         self.tpm.tpm_10g_core[core_id].set_src_mac(src_mac)
-    #     if src_ip is not None:
-    #         self.tpm.tpm_10g_core[core_id].set_src_ip(src_ip)
-    #     if dst_mac is not None:
-    #         self.tpm.tpm_10g_core[core_id].set_dst_mac(dst_mac)
-    #     if dst_ip is not None:
-    #         self.tpm.tpm_10g_core[core_id].set_dst_ip(dst_ip)
-    #     if src_port is not None:
-    #         self.tpm.tpm_10g_core[core_id].set_src_port(src_port)
-    #     if dst_port is not None:
-    #         self.tpm.tpm_10g_core[core_id].set_dst_port(dst_port)
-    #
-    # @connected
-    # def get_10g_core_configuration(self, core_id):
-    #     """ Get the configuration for a 10g core
-    #     :param core_id: Core ID """
-    #     return {'src_mac': int(self.tpm.tpm_10g_core[core_id].get_src_mac()),
-    #             'src_ip': int(self.tpm.tpm_10g_core[core_id].get_src_ip()),
-    #             'dst_ip': int(self.tpm.tpm_10g_core[core_id].get_dst_ip()),
-    #             'dst_mac': int(self.tpm.tpm_10g_core[core_id].get_dst_mac()),
-    #             'src_port': int(self.tpm.tpm_10g_core[core_id].get_src_port()),
-    #             'dst_port': int(self.tpm.tpm_10g_core[core_id].get_dst_port())}
-
     @connected
     def set_lmc_download(self, mode, payload_length=1024, dst_ip=None, src_port=0xF0D0, dst_port=4660, lmc_mac=None):
         """ Configure link and size of control data
@@ -339,44 +228,6 @@ class Tile(object):
         self['fpga1.lmc_gen.tx_demux'] = 1
         self['fpga2.lmc_gen.tx_demux'] = 1
 
-        # # Using 10G lane
-        # if mode.upper() == "10G":
-        #     if payload_length >= 8193:
-        #         logging.warning("Packet length too large for 10G")
-        #         return
-        #
-        #     if lmc_mac is None:
-        #         logging.warning("LMC MAC must be specified for 10G lane configuration")
-        #         return
-        #
-        #     # If dst_ip is None, use local lmc_ip
-        #     if dst_ip is None:
-        #         dst_ip = self._lmc_ip
-        #
-        #     self.configure_10g_core(2, dst_mac=lmc_mac,
-        #                             dst_ip=dst_ip,
-        #                             src_port=src_port,
-        #                             dst_port=dst_port)
-        #
-        #     self.configure_10g_core(6, dst_mac=lmc_mac,
-        #                             dst_ip=dst_ip,
-        #                             src_port=src_port,
-        #                             dst_port=dst_port)
-        #
-        #     self['fpga1.lmc_gen.payload_length'] = payload_length
-        #     self['fpga2.lmc_gen.payload_length'] = payload_length
-        #
-        #     self['fpga1.lmc_gen.tx_demux'] = 2
-        #     self['fpga2.lmc_gen.tx_demux'] = 2
-        #
-        # # Using dedicated 1G link
-        # elif mode.upper() == "1G":
-        #     self['fpga1.lmc_gen.tx_demux'] = 1
-        #     self['fpga2.lmc_gen.tx_demux'] = 1
-        # else:
-        #     logging.warning("Supported modes are 1g, 10g")
-        #     return
-
     @connected
     def set_lmc_integrated_download(self, mode, channel_payload_length, beam_payload_length,
                                     dst_ip=None, src_port=0xF0D0, dst_port=4660, lmc_mac=None):
@@ -388,33 +239,6 @@ class Tile(object):
         :param src_port: Source port for integrated data streams
         :param dst_port: Destination port for integrated data streams
         :param lmc_mac: LMC Mac address is required for 10G lane configuration"""
-
-        # # Using 10G lane
-        # if mode.upper() == "10G":
-        #     if lmc_mac is None:
-        #         logging.error("LMC MAC must be specified for 10G lane configuration")
-        #         return
-        #
-        #     # If dst_ip is None, use local lmc_ip
-        #     if dst_ip is None:
-        #         dst_ip = self._lmc_ip
-        #
-        #     self.configure_10g_core(2, dst_mac=lmc_mac,
-        #                             dst_ip=dst_ip,
-        #                             src_port=src_port,
-        #                             dst_port=dst_port)
-        #
-        #     self.configure_10g_core(6, dst_mac=lmc_mac,
-        #                             dst_ip=dst_ip,
-        #                             src_port=src_port,
-        #                             dst_port=dst_port)
-        #
-        # # Using dedicated 1G link
-        # elif mode.upper() == "1G":
-        #     pass
-        # else:
-        #     logging.error("Supported mode are 1g, 10g")
-        #     return
 
         # Setting payload lengths
         for i in range(len(self.tpm.tpm_integrator)):
@@ -459,14 +283,6 @@ class Tile(object):
             except:
                 tile_id = self['fpga1.dsp_regfile.config_id.tpm_id']
             return tile_id
-
-    # @connected
-    # def tweak_transceivers(self):
-    #     """ Tweak transceivers """
-    #     for f in ['fpga1', 'fpga2']:
-    #         for n in range(4):
-    #             add = int(self.tpm.memory_map['%s.eth_10g_drp.gth_channel_%i' % (f, n)].address) + 4*0x7C
-    #             self[add] = 0x6060
 
     @connected
     def get_fpga_time(self, device):
@@ -538,6 +354,7 @@ class Tile(object):
     def set_channeliser_truncation(self, trunc):
         """ Set channeliser truncation scale """
         # TODO!
+        pass
 
     # ---------------------------- Synchronisation routines ------------------------------------
     @connected
@@ -590,11 +407,6 @@ class Tile(object):
         else:
             logging.info("FPGAs time is not synchronized")
             return False
-
-        #fpga = "fpga1" if t0 > t1 else "fpga2"
-        #for i in range(abs(t1 - t0)):
-        #    logging.debug("Decrementing %s by 1" % fpga)
-        #    self.tpm["%s.pps_manager.curr_time_cmd.down_req" % fpga] = 0x1
 
     @connected
     def check_fpga_synchronization(self):
@@ -779,8 +591,6 @@ class Tile(object):
                      self.tpm["fpga2.pps_manager.timestamp_read_val"])
 
         # Set arm timestamp
-        # delay = number of frames to delay * frame time (shift by 8)
-        # delay = seconds * (1 / (1080 * 1e-9) / 256)
         delay = seconds * (1 / (32768 / 2 * 5 * 1e-9) / 256)
         for fpga in self.tpm.tpm_fpga:
             fpga.fpga_apply_sync_delay(t0 + int(delay))
@@ -807,9 +617,6 @@ class Tile(object):
     @connected
     def start_acquisition(self, start_time=None, delay=2):
         """ Start data acquisition """
-
-        # for f in ['fpga1', 'fpga2']:
-        #     self.tpm['%s.regfile.eth10g_ctrl' % f] = 0x0
 
         # Temporary (moved here from TPM control)
         try:
@@ -1073,12 +880,10 @@ class Tile(object):
     # ---------------------------- Wrapper for test generator ----------------------------
 
     def test_generator_set_tone(self, dds, frequency=100e6, ampl=0.0, phase=0.0, delay=128):
-        print "DDC frequency: " + str(self._ddc_frequency)
         if self._ddc_frequency != 0:
             translated_frequency = frequency - self._ddc_frequency + self._sampling_rate/(self._decimation_ratio*4.0)
         else:
             translated_frequency = frequency
-        print translated_frequency
 
         t0 = self.tpm["fpga1.pps_manager.timestamp_read_val"]
         self.tpm.test_generator[0].set_tone(dds, translated_frequency, ampl, phase, t0 + delay)

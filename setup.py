@@ -20,7 +20,7 @@ setup_args = {
     'url' : "https://github.com/ianmalcolm/reach_ctrl",
     'packages' : find_packages(),
     'include_package_data' : True,
-    'package_data' : {'' : ['config/*.yaml', 'config/*.fpg'],},
+#    'package_data' : {'' : ['config/*.yaml', 'config/*.fpg'],},
     'scripts':glob.glob('scripts/*'),
     'install_requires':read('requirements.txt').splitlines(),
     'long_description':read('README.md'),
