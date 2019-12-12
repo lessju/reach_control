@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-from sys import exit
+import numpy as np
 import logging
 import time
 import os
@@ -46,7 +46,7 @@ class Spectrometer:
         else:
             logging.error("Could not load bitfile {}, check filepath".format(bitfile))
 
-    def initialise(self, channel_trunction=2, integration_time=1 ,ada_gain=None):
+    def initialise(self, channel_truncation=2, integration_time=1, ada_gain=None):
         """ Initialise the TPM and spectrometer firmware """
 
         logging.info("Initialising TPM")
@@ -54,7 +54,7 @@ class Spectrometer:
 
         # Set ada gain if enabled
         if ada_gain is not None:
-            self._tile.tpm.tpm_ada.set_ada_gain(conf.ada_gain)
+            self._tile.tpm.tpm_ada.set_ada_gain(ada_gain)
 
         logging.info("Using 1G for LMC traffic")
         self._tile.set_lmc_download("1g")
@@ -62,7 +62,7 @@ class Spectrometer:
 
         # Set channeliser truncation
         logging.info("Configuring channeliser")
-        self._tile.set_channeliser_truncation(channel_trunction)
+        self._tile.set_channeliser_truncation(channel_truncation)
 
         # Configure continuous transmission of integrated channel
         self._tile.stop_integrated_data()
@@ -80,23 +80,25 @@ class Spectrometer:
         self._tile['fpga2.dsp_regfile.channelizer_fft_bit_round'] = 0xFFFF
         self._tile['board.regfile.ethernet_pause'] = 8000
 
-    def acquire_sectrum(self, nof_seconds=1):
+    def acquire_sectrum(self, channel=0, nof_seconds=1):
         """ Acquire spectra for defined number of seconds """
 
         # Start receiver
         self._spectra.start_receiver(nof_seconds)
 
-        # Start data transmission
+        # TODO: Start data transmission
         # ...
 
         # Wait for receiver to finish
-        spectra = self._spectra.stop_receiver()
+        # Spectra will be received in spectra/signals/channel order
+        timestamps, spectra = self._spectra.stop_receiver()
 
-        # Stop data transmission 
+        # TODO: Stop data transmission 
         # ...
 
         # Return spectra
-        return spectra
+        spectra = np.sum(spectra, axis=0)
+        return timestamps, spectra[channel, :]
 
 if __name__ == "__main__":
 
@@ -133,7 +135,7 @@ if __name__ == "__main__":
         
     # Initialise TPM if required
     if command_line_args.initialise:
-        tile.initialise(int(conf['channel_truncation']), int(conf['channel_truncation']), int(conf['ada_gain']))
+        tile.initialise(int(conf['channel_truncation']), int(conf['integration_time']), int(conf['ada_gain']))
 
     # Connect to board
     tile.connect()

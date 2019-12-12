@@ -39,7 +39,7 @@ class REACHConfig():
 
         # Load required configuration file
         if config_file_path:
-            self._load_from_file(config_file_path)
+            self._load_from_file(os.path.join(self._config_root, config_file_path))
         else:
             self._load_from_file(os.path.join(self._config_root, "reach.yaml"))
 

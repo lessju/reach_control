@@ -26,9 +26,6 @@ class Microcontroller:
         if not self.is_alive():
             logging.error('Cannot reach to microcontroller')
 
-    def init(self):
-        return True
-
     def _write(self, cmd):
         assert isinstance(cmd, str)
         self._itf.write(cmd + self.term)

@@ -1,0 +1,51 @@
+# This section defines observation-specific parameters
+observation:
+    name: test_observation
+    start_time: now   # A date format can be specified to schedule an observation
+    output_directory:  /tmp/reach_test_obs   # Directory where output files will be stored
+    spectrometer_id: 0  # ID of the spectrometer channel input to use
+
+
+# Define list of operations which must be performed
+operations:
+    # Power on any devices required for the operations listed in the config file
+    # Note that these steps also include the initialisation of the devices, if requried
+    # This is included such that during testing, only the hardware requried for the test is used
+    - power_on_spectrometer
+    - power_on_vna
+    - power_on_ucontroller
+
+    # VNA calibration is a assumed to be a pre-set routine, so no additional
+    # parameter are required in the config file. The output of the calibration
+    # routine will be saved using a set format
+    - calibrate_vna 
+
+    # When measuring S11 parameters, the MTS switch needs to be switched on
+    - switch_on_mts
+
+    # Measure S parameter for a particular source. The source must be defined in switches.yml
+    # For now, format is assumed to be ri and the file format will be generated automatically
+    # Additional parameter can be defined
+    - measure_s: {name: ns, source: noise_source}
+    # ...
+
+    # When measuring spectra, the MTS switch needs to be switched on
+    - switch_off_mts
+
+    # Measure spectrum through spectrometer. 
+    # Duration is the total integration time of the spectra
+    - measure_spectrum: {name: ns, source: noise_source, duration: 60} 
+    # ...
+
+    - observation_operations:
+        repetitions: 20  # Number of times the operations listed here will be performed
+        # Each repetition will peform the below
+        operations:
+            - measure_spectrum: {name: obs_ant, source: antenna, duration: 60}
+            - measure_spectrum: {name: obs_load, source: cold, duration: 60}
+            - measure_spectrum: {name: obs_ns, source: noise_source, duration: 60}
+
+    # Power off devices at the end of the observation
+    - power_off_ucontroller
+    - power_off_vna
+    - power_off_spectrometer

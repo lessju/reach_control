@@ -59,7 +59,7 @@ class Tile(object):
         self.tpm = TPM()
 
         # Add plugin directory (load module locally)
-        tf = __import__("tpm_reach_firmware", fromlist=[None])
+        tf = __import__("reach_ctrl.spectrometer.tpm_reach_firmware", fromlist=[None])
         self.tpm.add_plugin_directory(os.path.dirname(tf.__file__))
 
         self.tpm.connect(ip=self._ip, port=self._port, initialise=initialise,

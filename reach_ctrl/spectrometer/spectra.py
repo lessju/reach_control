@@ -51,13 +51,14 @@ class Spectra:
         # Received spectra placeholder
         self._receiver_thread = None
         self._received_spectra = None
+        self._received_timestamps = None
 
 
     def initialise(self):
         """ Initilise socket and set local buffers """
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.bind((self._ip, self._port))
-        self._socket.settimeout(1)
+        self._socket.settimeout(2)
         self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2*1024*1024)
 
     def receive_spectrum(self):
@@ -92,14 +93,15 @@ class Spectra:
             # If the buffer is full, finalize packet buffer
             if self._detect_full_buffer():
                 self._finalise_buffer()
-                return self._data_buffer
+                return self._timestamp, self._data_buffer
 
-    def _receive_spectra_threaded(self, nof_spectra):
+    def _receive_spectra_threaded(self, nof_spectra=1):
         """ Receive specified number of thread, should run in a separate thread """
         
         self._received_spectra = np.zeros((nof_spectra, self._nof_signals, self._nof_channels))
+        self._received_timestamps = np.zeros((nof_spectra))
         for i in range(nof_spectra):
-            self._received_spectra[i] = self.receive_spectrum()
+            self._received_timestamps[i], self._received_spectra[i] = self.receive_spectrum()
 
     def start_receiver(self, nof_spectra):
         """ Receive specified number of spectra """
@@ -116,7 +118,7 @@ class Spectra:
         self._receiver_thread.join()
 
         # Return result
-        return self._received_spectra
+        return self._received_timestamps, self._received_spectra
 
     def _decode_spead_header(self, packet):
         """ Decode SPEAD packet header 
@@ -220,11 +222,12 @@ if __name__ == "__main__":
 
     spectra = Spectra(ip=config.ip, port=config.port)
     spectra.initialise()
-    spectrum = 10 * np.log10(spectra.receive_spectrum())
+    spectrum = 10 * np.log10(spectra.receive_spectrum()[1])
     
     from matplotlib import pyplot as plt
-    plt.plot(spectrum[0])
-    plt.plot(spectrum[1])
-    plt.plot(spectrum[2])
-    plt.plot(spectrum[3])
+    plt.plot(spectrum[0], label="Channel 0")
+    plt.plot(spectrum[1], label="Channel 1")
+    plt.plot(spectrum[2], label="Channel 2")
+    plt.plot(spectrum[3], label="Channel 3")
+    plt.legend()
     plt.show()

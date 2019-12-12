@@ -19,10 +19,13 @@ spectrometer:
     lmc_ip: 10.0.10.40
     lmc_port: 4660
     bitstream: itpm_v1_1_tpm_reach_wrap_v11.bit
-    channel_truncation: 1
+    nof_frequency_channels: 16384
+    integration_time: 1
     ada_gain: 15
     channel_truncation: 2
 
 # uController parameters
 ucontroller:
     name: uctrl
+    port: 256
+    baudrate: 256 

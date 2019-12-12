@@ -17,7 +17,7 @@ class VNA(object):
         # Set termination symbol
         self.term = term
 
-    def init(self, channel=1, freqstart=40, freqstop=180, ifbw=1000, average=20, calib_kit=23, power_level=-5):
+    def initialise(self, channel=1, freqstart=40, freqstop=180, ifbw=1000, average=20, calib_kit=23, power_level=-5):
         """ VNA Initialization
 
             Possible options are:
