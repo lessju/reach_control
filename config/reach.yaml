@@ -11,7 +11,7 @@ operations:
     # Power on any devices required for the operations listed in the config file
     # Note that these steps also include the initialisation of the devices, if requried
     # This is included such that during testing, only the hardware requried for the test is used
-    - power_on_spectrometer
+    - power_on_spectrometer: {initialise: True}
     - power_on_vna
     - power_on_ucontroller
 

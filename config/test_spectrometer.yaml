@@ -9,7 +9,7 @@ observation:
 # Define list of operations which must be performed
 operations:
     - power_on_spectrometer: {initialise: False}
-    - measure_spectrum: {name: test, source: none, duration: 1} 
-    # - measure_spectrum: {name: test2, source: none, duration: 1} 
-    # - measure_spectrum: {name: test3, source: none, duration: 1} 
+    - measure_spectrum: {name: test, source: none, duration: 60} 
+    - measure_spectrum: {name: test_2, source: none, duration: 60} 
+    - measure_spectrum: {name: test_3, source: none, duration: 60} 
     - power_off_spectrometer
