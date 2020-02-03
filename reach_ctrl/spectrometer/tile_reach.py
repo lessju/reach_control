@@ -931,7 +931,7 @@ class Tile(object):
 
     def load_default_poly_coeffs(self):
         return
-        print "Setting coeffs"
+        print("Setting coeffs")
         N = self['fpga1.poly.config1.length']
         S = self['fpga1.poly.config1.stages']
         MUX = self['fpga1.poly.config1.mux']
@@ -954,9 +954,9 @@ class Tile(object):
 
         coeff_ram = np.zeros(N/NOF_RAM_PER_STAGE, dtype=int)
         for s in range(S):
-            print "stage " + str(s)
+            print("stage " + str(s))
             for ram in range(NOF_RAM_PER_STAGE):
-                print "ram " + str(ram)
+                print("ram " + str(ram))
                 idx = 0
                 for n in range(N):
                     if (n % MUX) / MUX_PER_RAM == ram:
@@ -978,7 +978,7 @@ class Tile(object):
                 self['fpga1.poly.coeff'] = coeff_ram_arc.tolist()
                 self['fpga2.poly.coeff'] = coeff_ram_arc.tolist()
 
-        print "done"
+        print("done")
 
     def set_fpga_sysref_gen(self, sysref_period):
         self['fpga1.pps_manager.sysref_gen_period'] = sysref_period-1

@@ -1,6 +1,5 @@
 import logging
 import serial
-import time
 
 
 class Microcontroller:

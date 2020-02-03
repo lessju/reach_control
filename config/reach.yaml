@@ -1,9 +1,12 @@
 # This section defines observation-specific parameters
 observation:
     name: test_observation
-    start_time: now   # A date format can be specified to schedule an observation
+    scheduling_mode: UTC  # Scheduling format being used (UTC or LST)
+    start_time: now   # Date format should be: %d/%m/%Y_%H:%M
     output_directory:  /tmp/reach_test_obs   # Directory where output files will be stored
     spectrometer_id: 0  # ID of the spectrometer channel input to use
+    longitude: 0.0 # Longitude of location
+    latitude: 0.0  # Latitude of location
 
 
 # Define list of operations which must be performed
@@ -38,7 +41,11 @@ operations:
     # ...
 
     - observation_operations:
+        start_time: now  # When the observation measurement will start
         repetitions: 20  # Number of times the operations listed here will be performed
+        every: 300       # Operations below will be performed every specified number of seconds
+                         # A value of 0 means repeat operations without waiting for any elapsed time
+
         # Each repetition will peform the below
         operations:
             - measure_spectrum: {name: obs_ant, source: antenna, duration: 60}

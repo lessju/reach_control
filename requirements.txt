@@ -1,3 +1,7 @@
+ephem
+visa
+numpy
+h5py
 pyvisa
 pyvisa-py
 pyserial

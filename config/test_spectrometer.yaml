@@ -4,6 +4,8 @@ observation:
     start_time: now   # A date format can be specified to schedule an observation
     output_directory:  /tmp/reach_test_obs   # Directory where output files will be stored
     spectrometer_id: 2  # ID of the spectrometer channel input to use
+    longitude: 0.0
+    latitude:  0.0
 
 
 # Define list of operations which must be performed

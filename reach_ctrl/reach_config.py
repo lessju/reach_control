@@ -1,14 +1,39 @@
 from logging.handlers import TimedRotatingFileHandler
-from singleton_decorator import singleton
-import logging.config as log_config
 import datetime
 import logging
 import yaml
 import sys
 import os
 
+
+class _SingletonWrapper:
+    """
+    A singleton wrapper class. Its instances would be created
+    for each decorated class.
+    """
+
+    def __init__(self, cls):
+        self.__wrapped__ = cls
+        self._instance = None
+
+    def __call__(self, *args, **kwargs):
+        """Returns a single instance of decorated class"""
+        if self._instance is None:
+            self._instance = self.__wrapped__(*args, **kwargs)
+        return self._instance
+
+
+def singleton(cls):
+    """
+    A singleton decorator. Returns a wrapper objects. A call on that object
+    returns a single instance object of decorated class. Use the __wrapped__
+    attribute to access decorated class directly in unit tests
+    """
+    return _SingletonWrapper(cls)
+
+
 @singleton
-class REACHConfig():
+class REACHConfig:
     def __init__(self, config_file_path=None):
         """ Initialise the REACH configuration
         :param config_file_path: The path to the REACH configuration file """
@@ -17,7 +42,7 @@ class REACHConfig():
         if "REACH_CONFIG_DIRECTORY" not in os.environ:
             logging.error("REACH_CONFIG_DIRECTORY not defined, cannot configure")
             return
-        
+
         self._config_root = os.path.expanduser(os.environ['REACH_CONFIG_DIRECTORY'])
 
         # Check if file path is valid
@@ -91,7 +116,7 @@ class REACHConfig():
         logging_level = self._loaded_settings['logging']['loggers']['REACH']['level']
         formatter = logging.Formatter(self._loaded_settings['logging']['formatters']['standard']['format'])
         root_logger.setLevel(logging_level)
-        
+
         # Set file handler
         handler = TimedRotatingFileHandler(log_path, when="h", interval=1, backupCount=5, utc=True)
         handler.setFormatter(formatter)
@@ -101,7 +126,7 @@ class REACHConfig():
         # Set console handler
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(formatter)
-        handler.setLevel( logging_level)
+        handler.setLevel(logging_level)
         root_logger.addHandler(handler)
 
         return log_path
@@ -111,7 +136,8 @@ class REACHConfig():
         if key in self._loaded_settings.keys():
             return self._loaded_settings[key]
         else:
-            logging.error("Requsted setting {} does not exist".format(key))
+            logging.error("Requested setting {} does not exist".format(key))
+
 
 if __name__ == "__main__":
     REACHConfig()

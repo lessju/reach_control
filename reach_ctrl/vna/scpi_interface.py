@@ -1,6 +1,7 @@
 import logging
 import visa
 
+
 class SCPIInterface(object):
 
     def __init__(self, ip='localhost', port=5025, term='\n', timeout=100000):

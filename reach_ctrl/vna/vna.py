@@ -1,8 +1,8 @@
-import numpy as np
 import logging
-import time
 
-from reach_ctrl.scpi_interface import SCPIInterface
+import numpy as np
+from reach_ctrl.vna.scpi_interface import SCPIInterface
+
 
 class VNA(object):
 
