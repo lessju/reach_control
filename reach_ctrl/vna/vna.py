@@ -1,21 +1,37 @@
-import logging
-
+from subprocess import Popen
 import numpy as np
+import logging
+import psutil
+import time
+
 from reach_ctrl.vna.scpi_interface import SCPIInterface
 
 
 class VNA(object):
 
-    def __init__(self, term="\n"):
+    def __init__(self, gui_path=None, term="\n"):
         """ Tested on Copper Mountain VNA TR1300/1
             interface       SCPIInterface
             term
         """
+        # GUI executable must be running to communicate with the VNA
+        self._gui_process = self._run_gui(gui_path)
+
         # Create VISA interface
         self.itf = SCPIInterface()
 
         # Set termination symbol
         self.term = term
+
+    def __del__(self):
+        self.terminate()
+
+    def terminate(self):
+        """ Terminate VNA """
+
+        # Kill VNA GUI if launched from this object
+        if self._gui_process is not None and type(self._gui_process) is Popen:
+            self._gui_process.kill()
 
     def initialise(self, channel=1, freqstart=40, freqstop=180, ifbw=1000, average=20, calib_kit=23, power_level=-5):
         """ VNA Initialization
@@ -29,7 +45,7 @@ class VNA(object):
             power_level in dBm
             calib_kit   defined in VNA GUI
         """
-        
+
         # Set parameters
         self.channel(channel)
         self.freq(start=freqstart, stop=freqstop)
@@ -56,8 +72,8 @@ class VNA(object):
         SENSe<Ch>:FREQuency:STARt <frequency>
         SENSe<Ch>:FREQuency:STOP <frequency>
         """
-        assert isinstance(start, int) or start == None
-        assert isinstance(stop, int) or stop == None
+        assert isinstance(start, int) or start is None
+        assert isinstance(stop, int) or stop is None
         if isinstance(start, int) and isinstance(stop, int):
             assert start < stop
 
@@ -71,7 +87,7 @@ class VNA(object):
         if start is None and stop is None:
             start = self.read('SENS1:FREQ:STAR?').strip()
             stop = self.read('SENS1:FREQ:STOP?').strip()
-            return (float(start), float(stop))
+            return float(start), float(stop)
 
     def ifbw(self, res=None):
         """ Set IF bandwidth resolution
@@ -82,9 +98,9 @@ class VNA(object):
         available options are:
             10, 30, 100, 300, 1000, 3000, 10000, 30000
         """
-        STEP = [1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 30000]
+        step = [1, 3, 10, 30, 100, 300, 1000, 3000, 10000, 30000]
         if res:
-            assert res in STEP
+            assert res in step
             self.write('SENS1:BWID {} HZ'.format(res))
             logging.debug('Set IF bandwidth to {}'.format(res))
         else:
@@ -95,7 +111,7 @@ class VNA(object):
         DISPlay:WINDow<Ch>:ACTivate
         Sets the active channel (no query)
         """
-        
+
         self.write('DISP:WIND{}:ACT'.format(ch))
 
     def calib_kit(self, kit=15):
@@ -133,19 +149,19 @@ class VNA(object):
         """
 
         STD = ['open',
-            'short',
-            'load',
-            'thru', #(through)
+               'short',
+               'load',
+               'thru',  # (through)
 
-            'off',
-            'on',
-            'apply',
-            None,
+               'off',
+               'on',
+               'apply',
+               None,
 
-            'sload', #(sliding load)
-            'arbi', #(arbitrary)
-            'databased', #(data-based)
-        ]
+               'sload',  # (sliding load)
+               'arbi',  # (arbitrary)
+               'databased',  # (data-based)
+               ]
 
         srcport = source_port
         rcvport = receive_port
@@ -153,10 +169,10 @@ class VNA(object):
         std = std.lower()
         assert std in STD
 
-        if std=='thru':
+        if std == 'thru':
             port = '{},{}'.format(rcvport, srcport)
 
-        if std in ['open', 'short', 'load',]:
+        if std in ['open', 'short', 'load', ]:
             logging.debug('Select calibration standard {}'.format(std))
             self.write('SENS1:CORR:COLL:METH:{} {}'.format(std, port))
             logging.debug('Measure under calibration standard {}'.format(std))
@@ -168,7 +184,7 @@ class VNA(object):
             logging.debug('Measure under calibration standard {}'.format(std))
             self.write('SENS1:CORR:COLL:{} {}'.format(std, port))
 
-        elif std in ['on','off']:
+        elif std in ['on', 'off']:
             logging.debug('Switch {} calibration'.format(std))
             self.write('SENS1:CORR:COLL:STAT {}'.format(std))
 
@@ -176,7 +192,7 @@ class VNA(object):
             logging.debug('Apply calibration data')
             self.write('SENS1:CORR:COLL:SAVE')
 
-        elif std == None:
+        elif std is None:
             ret = self.read('SENS1:CORR:STAT?').strip()
             return int(ret)
 
@@ -195,8 +211,7 @@ class VNA(object):
         MMEMory:STORe[:STATe] <string>
         """
 
-
-        STYPE = ['state', 'cstate', 'dstate', 'cdstate',]
+        STYPE = ['state', 'cstate', 'dstate', 'cdstate', ]
         assert stype.lower() in STYPE
 
         self.write('MMEM:STOR:STYP {}'.format(stype))
@@ -208,21 +223,20 @@ class VNA(object):
         MMEMory:LOAD[:STATe] <string>
         """
         self.write('gMMEM:LOAD {}'.format(filename))
-        loggin.debug('Load system state from file {}'.format(filename))
-        
+        logging.debug('Load system state from file {}'.format(filename))
 
     def trace(self, s11='MLOG', s21='MLOG', res=1001):
 
-        #Set up 2 traces, S11, S21
-        self.write('CALC1:PAR:COUN 2') # 2 Traces
-        self.write('CALC1:PAR1:DEF S11') #Choose S11 for trace 1
-        self.write('CALC1:TRAC1:FORM {}'.format(s11))  #log Mag format
-        
-        #Format can be SMIT or POL or SWR and many other types
-        self.write('CALC1:PAR2:DEF S21') #Choose S21 for trace 2
-        self.write('CALC1:TRAC2:FORM {}'.format(s21)) #Log Mag format
-        self.write('DISP:WIND1:TRAC2:Y:RPOS 1') #Move S21 up
-        self.write('SENS1:SWE:POIN {}'.format(res))  #Number of points
+        # Set up 2 traces, S11, S21
+        self.write('CALC1:PAR:COUN 2')  # 2 Traces
+        self.write('CALC1:PAR1:DEF S11')  # Choose S11 for trace 1
+        self.write('CALC1:TRAC1:FORM {}'.format(s11))  # log Mag format
+
+        # Format can be SMIT or POL or SWR and many other types
+        self.write('CALC1:PAR2:DEF S21')  # Choose S21 for trace 2
+        self.write('CALC1:TRAC2:FORM {}'.format(s21))  # Log Mag format
+        self.write('DISP:WIND1:TRAC2:Y:RPOS 1')  # Move S21 up
+        self.write('SENS1:SWE:POIN {}'.format(res))  # Number of points
 
     def snp_save(self, name, save_format="ri"):
         """ Save measurement in touchstone file
@@ -241,10 +255,10 @@ class VNA(object):
             S22. (no query)
         """
 
-        FORMAT = ['ri','db','ma']
+        FORMAT = ['ri', 'db', 'ma']
         assert save_format.lower() in FORMAT
 
-        self.write('MMEM:STOR:SNP:TYPE:S2P 1,2') # not mentioned in manual
+        self.write('MMEM:STOR:SNP:TYPE:S2P 1,2')  # not mentioned in manual
         self.write('MMEM:STOR:SNP:FORM {}'.format(save_format))
         self.write('MMEM:STOR:SNP "{}"'.format(name))
         logging.debug('Save touchstone file in {} format at {}'.format(save_format, name))
@@ -259,87 +273,87 @@ class VNA(object):
         def myround(x, base=0.05):
             return base * round(x / base)
 
-        if dbm == None:
-            return self.read('SOUR1:POW?') #Get data as string
-        elif dbm <=3 and dbm >=-55:
+        if dbm is None:
+            return self.read('SOUR1:POW?')  # Get data as string
+        elif dbm <= 3 and dbm >= -55:
             mydbm = myround(dbm)
             self.write('SOUR1:POW {}'.format(mydbm))
             logging.debug('Set power level to {}'.format(mydbm))
         else:
             raise ValueError('Invalid parameter')
 
-    def power_slope(self, slope=None):
-        """
-        SOURce<Ch>:POWer[:LEVel]:SLOPe[:DATA] <power>
-            <power>     the power slope value from -2 to +2
-                        Resolution 0.1
-        """
-        if slope == None:
-            return self.read('SOUR1:POW:SLOP?') #Get data as string
-        elif dbm <=3 and dbm >=-55:
-            myslope = round(slope, 1)
-            self.write('SOUR1:POW:SLOP {}'.format(myslope))
-            logging.debug('Set power slope to {}'.format(myslope))
-        else:
-            raise ValueError('Invalid parameter')
+    # def power_slope(self, slope=None):
+    #     """
+    #     SOURce<Ch>:POWer[:LEVel]:SLOPe[:DATA] <power>
+    #         <power>     the power slope value from -2 to +2
+    #                     Resolution 0.1
+    #     """
+    #     if slope is None:
+    #         return self.read('SOUR1:POW:SLOP?')  # Get data as string
+    #     elif dbm <= 3 and dbm >= -55:
+    #         myslope = round(slope, 1)
+    #         self.write('SOUR1:POW:SLOP {}'.format(myslope))
+    #         logging.debug('Set power slope to {}'.format(myslope))
+    #     else:
+    #         raise ValueError('Invalid parameter')
+    #
+    # def power_freq(self, freq=None):
+    #     """
+    #     SENSe<Ch>:FREQuency[:CW] <frequency>
+    #         <frequency> for TR1300/1 between 3e5 and 1.3e9
+    #     """
+    #     if freq is None:
+    #         return self.read('SENS1:FREQuency?')  # Get data as string
+    #     elif freq in range(3e5, 1.3e9 + 1):
+    #         self.write('SENS1:FREQ {}'.format(freq))
+    #         logging.debug('Set power frequency to {}'.format(freq))
+    #     else:
+    #         raise ValueError('Invalid parameter')
 
-    def power_freq(self, freq=None):
-        """
-        SENSe<Ch>:FREQuency[:CW] <frequency>
-            <frequency> for TR1300/1 between 3e5 and 1.3e9
-        """
-        if freq == None:
-            return self.read('SENS1:FREQuency?') #Get data as string
-        elif freq in range(3e5, 1.3e9+1):
-            self.write('SENS1:FREQ {}'.format(freq))
-            logging.debug('Set power frequency to {}'.format(freq))
-        else:
-            raise ValueError('Invalid parameter')
-
-    def power_enable(self, enable=None):
-        """
-        OUTPut[:STATe] {ON|OFF|1|0}
-        """
-        if enable == None:
-            return self.read('OUTP?') #Get data as string
-        elif enable:
-            self.write('OUTP 1')
-            logging.debug('Enable power output')
-        elif not enable:
-            self.write('OUTP 0')
-            logging.debug('Disable power output')
-        else:
-            raise ValueError('Invalid parameter')
+    # def power_enable(self, enable=None):
+    #     """
+    #     OUTPut[:STATe] {ON|OFF|1|0}
+    #     """
+    #     if enable is None:
+    #         return self.read('OUTP?')  # Get data as string
+    #     elif enable:
+    #         self.write('OUTP 1')
+    #         logging.debug('Enable power output')
+    #     elif not enable:
+    #         self.write('OUTP 0')
+    #         logging.debug('Disable power output')
+    #     else:
+    #         raise ValueError('Invalid parameter')
 
     def measure(self):
 
-        #Trigger a measurement
-        self.write('TRIG:SEQ:SING') #Trigger a single sweep
+        # Trigger a measurement
+        self.write('TRIG:SEQ:SING')  # Trigger a single sweep
         self.wait()
-        Freq = self.read('SENS1:FREQ:DATA?') #Get data as string
-        S11 = self.read('CALC1:TRAC1:DATA:FDAT?') #Get data as string
-        S21 = self.read('CALC1:TRAC2:DATA:FDAT?') #Get data as string
-        
-        #split the long strings into a string list
-        #also take every other value from magnitues since second value is 0
-        #If complex data were needed we would use polar format and the second
-        #value would be the imaginary part
+        Freq = self.read('SENS1:FREQ:DATA?')  # Get data as string
+        S11 = self.read('CALC1:TRAC1:DATA:FDAT?')  # Get data as string
+        S21 = self.read('CALC1:TRAC2:DATA:FDAT?')  # Get data as string
+
+        # split the long strings into a string list
+        # also take every other value from magnitues since second value is 0
+        # If complex data were needed we would use polar format and the second
+        # value would be the imaginary part
         Freq = Freq.split(',')
         S11 = S11.split(',')
-        #S11 = S11[::2]
+        # S11 = S11[::2]
         S21 = S21.split(',')
-        #S21 = S21[::2]
+        # S21 = S21[::2]
 
-        #Chage the string values into numbers
+        # Change the string values into numbers
         S11 = np.asarray([float(s) for s in S11])
         S21 = np.asarray([float(s) for s in S21])
         S11 = S11[::2] + 1j * S11[1::2]
         S21 = S21[::2] + 1j * S21[1::2]
-        Freq = [float(f)/1e6 for f in Freq]
-        return np.vstack((Freq,S11,S21)).T
+        Freq = [float(f) / 1e6 for f in Freq]
+        return np.vstack((Freq, S11, S21)).T
 
     def wait(self):
-        self.read('*OPC?') #Wait for measurement to complete
+        self.read('*OPC?')  # Wait for measurement to complete
 
     def average(self, cnt=None):
         """
@@ -348,7 +362,7 @@ class VNA(object):
         SENSe<Ch>:AVERage:COUNt <numeric>
         SENSe<Ch>:AVERage:COUNt?
         """
-        if cnt == None:
+        if cnt is None:
             if self.read('SENS1:AVER?') == '0':
                 return 0
             else:
@@ -373,12 +387,12 @@ class VNA(object):
         SENSe<Ch>:SWEep:TYPE?
         """
 
-        STYPE = ['linear','logarithmic','segment','power','vvm']
-        if spoints == None and stime == None and stype == None:
+        STYPE = ['linear', 'logarithmic', 'segment', 'power', 'vvm']
+        if spoints is None and stime is None and stype is None:
             spoints = int(self.read('SENS1:SWE:POIN?'))
             stime = float(self.read('SENS1:SWE:POIN:TIME?'))
             stype = self.read('SENS1:SWE:TYPE?')
-            return {'points':spoints,'time':stime,'type':stype}
+            return {'points': spoints, 'time': stime, 'type': stype}
         else:
             if isinstance(spoints, int):
                 self.write('SENS1:SWE:POIN {}'.format(spoints))
@@ -390,3 +404,46 @@ class VNA(object):
                 self.write('SENS1:SWE:TYPE {}'.format(stype))
                 logging.debug('Set sweep type to {} '.format(stype))
 
+    def _run_gui(self, gui_path):
+        """ Check if GUI is running, and if not launch a process """
+        if "TRVNA.exe" not in (p.name() for p in psutil.process_iter()):
+            if gui_path is None:
+                logging.error("VNA GUI is not running and no path provided. Cannot communicate with VNA")
+                exit()
+            else:
+                # Launch GUI is a new process
+                process = Popen([gui_path])
+
+                # Wait for GUI to load
+                time.sleep(10)
+
+                return process
+
+
+if __name__ == "__main__":
+    from reach_ctrl.reach_config import REACHConfig
+
+    REACHConfig()
+
+    conf = REACHConfig()['vna']
+    vna = VNA(conf['gui_path'])
+
+    logging.info("Connected VNA")
+    vna.initialise(channel=conf['channel'],
+                   freqstart=conf['freqstart'],
+                   freqstop=conf['freqstop'],
+                   ifbw=conf['ifbw'],
+                   average=conf['average'],
+                   calib_kit=conf['calib_kit'],
+                   power_level=conf['power_level'])
+    logging.info("Initialised VNA")
+
+    vna.calib("open")
+    vna.wait()
+    logging.info("Calibrated")
+
+    vna.sweep()
+    logging.info("Sweeped")
+
+    vna.state_save("Test_file")
+    logging.info("Saved file")

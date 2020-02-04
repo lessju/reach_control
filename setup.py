@@ -10,17 +10,16 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 setup_args = {
-    'name' : "reach_ctrl",
-    'version': '0.0.1',
-    'author' : "Tian Huang",
-    'author_email' : "ian.h.0628@gmail.com",
+    'name' : "reach_control",
+    'version': '0.0.2',
+    'author' : "Alessio Magro",
+    'author_email' : "alessio.magro@um.edu.mt.com",
     'description' : ("Digital front-end control for REACH project"),
     'license' : "LICENSE",
     'keywords' : "digital control REACH",
-    'url' : "https://github.com/ianmalcolm/reach_ctrl",
+    'url' : "https://github.com/lessju/reach_control",
     'packages' : find_packages(),
     'include_package_data' : True,
-#    'package_data' : {'' : ['config/*.yaml', 'config/*.fpg'],},
     'scripts':glob.glob('scripts/*'),
     'install_requires':read('requirements.txt').splitlines(),
     'long_description':read('README.md'),
@@ -31,7 +30,6 @@ setup_args = {
         'Programming Language :: Python :: 2.7',
         #'Programming Language :: Python :: 3.6',
     ],
-    #'zip_safe': False,
 }
 
 if __name__ == '__main__':

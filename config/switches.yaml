@@ -1,16 +1,20 @@
-# GPIO pin mappings to microcontroller must ba added here
-
+# GPIO pin mappings to microcontroller
 switches:
     MTS:
         name: MTS
+        pins: [22, 23, 24, 25, 26, 27, 28]
     MS1:
         name: MS1
+        pins: [34, 35, 36, 37, 38]
     MS2:
         name: MS2
+        pins: []
     MS3:
         name: MS3
+        pins: []
     MS4:
         name: MS4
+        pins: []
 
 sources:
     antenna:

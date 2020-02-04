@@ -107,7 +107,7 @@ class REACHObservation:
         elif operation == "switch_on_mts":
             self._switch_mts(True)
         elif operation == "switch_off_mts":
-            self._switch_mts(True)
+            self._switch_mts(False)
         elif operation == "calibrate_vna":
             self._calibrate_vna()
         elif operation == "measure_s":
@@ -331,7 +331,7 @@ class REACHObservation:
     def _toggle_switch(self, switch, on):
         """ Toggle switch through microcontroller
         :param switch: Switch name
-        :param on: True of switch is turned on, off otherwise """
+        :param on: True if switch is turned on, off otherwise """
         # TODO: Implement properly
         return
 
@@ -341,7 +341,7 @@ class REACHObservation:
 
         # Simulation mode logging
         if self._simulation_mode:
-            logging.info("MTS will be switched on")
+            logging.info("MTS will be switched {}".format("on" if on else "off"))
             return
 
         self._toggle_switch("MTS", on)
@@ -433,7 +433,10 @@ class REACHObservation:
             logging.info("VNA will be switched off")
             return
 
-        # TODO: What do we need?
+        # Terminate VNA
+        if self._vna is None:
+            self._vna.terminate()
+
         logging.info("Power off VNA")
 
     def _switch_off_spectrometer(self):

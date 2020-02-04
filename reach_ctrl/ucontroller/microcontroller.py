@@ -26,8 +26,7 @@ class Microcontroller:
             logging.error('Cannot reach to microcontroller')
 
     def _write(self, cmd):
-        assert isinstance(cmd, str)
-        self._itf.write(cmd + self.term)
+        self._itf.write((cmd + self.term).encode())
 
     def _read_all(self):
         return self._itf.read_all()
@@ -36,7 +35,7 @@ class Microcontroller:
         return self._itf.readline()
 
     def is_alive(self):
-        return 'The following commands are available:' == self.get('help').strip()
+        return b'The following commands are available:' == self.get('help').strip()
 
     def exit(self):
         """
@@ -54,7 +53,7 @@ class Microcontroller:
 
     def gpio(self, pin, val=None):
 
-        if val==None:
+        if val is None:
             ret = self.get('gpio {}'.format(pin)).strip()
             try:
                 return int(ret)
@@ -66,7 +65,7 @@ class Microcontroller:
 
     def gpios(self, pins, vals=None, default=0):
 
-        if vals==None:
+        if vals == None:
             ret = []
             for p in pins:
                 ret += [self.gpio(p)]
@@ -77,5 +76,11 @@ class Microcontroller:
             for p in pins:
                 self.gpio(p, default)
             for i in range(len(pins)):
-                self.gpio(pins[i],vals[i])
+                self.gpio(pins[i], vals[i])
 
+
+if __name__ == "__main__":
+    from reach_ctrl.reach_config import REACHConfig
+
+    conf = REACHConfig()['ucontroller']
+    ucontroller = Microcontroller(conf['port'], conf['baudrate'])

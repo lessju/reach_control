@@ -3,6 +3,7 @@
 # VNA parameters
 vna:
     name: vna0
+    gui_path: C:\VNA\TRVNA\TRVNA.exe
     channel: 1
     freqstart: 40
     freqstop: 180
@@ -27,5 +28,5 @@ spectrometer:
 # uController parameters
 ucontroller:
     name: uctrl
-    port: 256
-    baudrate: 256 
+    port: COM4
+    baudrate: 256

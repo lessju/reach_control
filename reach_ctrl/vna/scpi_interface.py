@@ -41,9 +41,8 @@ class SCPIInterface(object):
         assert msg.endswith(self.term), '{}\nMissing read_termination in write message'.format(msg)
         self.CMT.write_ascii_values(msg, values)
 
-
     def read(self, msg):
         """ Read value or state through SCPI """
-        
+
         assert msg.endswith(self.term), '{}\nMissing read_termination in read message'.format(msg)
         return self.CMT.query(msg)
