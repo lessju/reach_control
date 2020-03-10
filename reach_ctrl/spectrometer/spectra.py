@@ -1,10 +1,16 @@
+from __future__ import division
+from builtins import hex
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import numpy as np
 import threading
 import logging
 import socket
 import struct
 
-class Spectra:
+class Spectra(object):
     """ REACH spectrometer data receiver """
     
     def __init__(self, ip, port=4660, nof_signals=4, nof_channels=16384):
@@ -40,9 +46,9 @@ class Spectra:
         
         # Payload data parameters
         self._data_width = 64
-        self._data_byte = self._data_width / 8
+        self._data_byte = old_div(self._data_width, 8)
         self._byte_per_packet = 1024
-        self._expected_nof_packets = self._nof_signals * self._nof_channels * (self._data_width / 8) / self._byte_per_packet
+        self._expected_nof_packets = old_div(self._nof_signals * self._nof_channels * (old_div(self._data_width, 8)), self._byte_per_packet)
 
         # Book keeping
         self._received_packets = 0
@@ -87,7 +93,7 @@ class Spectra:
                 continue
 
             # Valid packet, extract payload and add to buffer
-            payload = struct.unpack('<' + 'q' * (self._payload_length / 8), packet[self._offset:])
+            payload = struct.unpack('<' + 'q' * (old_div(self._payload_length, 8)), packet[self._offset:])
             self._add_packet_to_buffer(payload)
 
             # If the buffer is full, finalize packet buffer
@@ -169,7 +175,7 @@ class Spectra:
     def _add_packet_to_buffer(self, data):
         """ Add packet content to buffer """
         index = self._start_channel_id * 2
-        self._data_reassembled[self._start_antenna_id / 2, index:index + (self._payload_length / self._data_byte)] = data
+        self._data_reassembled[old_div(self._start_antenna_id, 2), index:index + (old_div(self._payload_length, self._data_byte))] = data
         self._received_packets += 1
 
     def _finalise_buffer(self):
@@ -178,15 +184,15 @@ class Spectra:
         # Demultipliex buffer
         for b in range(2):
             for n in range(2*self._nof_channels):
-                self._data_buffer_scrambled[(n % 2) + 2*b, n / 2] = self._data_reassembled[b, n]
+                self._data_buffer_scrambled[(n % 2) + 2*b, old_div(n, 2)] = self._data_reassembled[b, n]
         
         # Descramble buffer
         for b in range(4):
             for n in range(self._nof_channels):
                 if n % 2 == 0:
-                    channel = n / 2
+                    channel = old_div(n, 2)
                 else:
-                    channel = n / 2 + self._nof_channels / 2
+                    channel = old_div(n, 2) + old_div(self._nof_channels, 2)
                 self._data_buffer[b, channel] = self._data_buffer_scrambled[b, n]
 
     def _detect_full_buffer(self):

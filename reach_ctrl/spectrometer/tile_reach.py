@@ -1,3 +1,8 @@
+from __future__ import division
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import functools
 import logging
 import socket
@@ -94,8 +99,8 @@ class Tile(object):
         for firmware in self.tpm.tpm_reach_firmware:
             firmware.initialise_firmware()
 
-        self['fpga1.jesd204_if.regfile_axi4_tlast_period'] = 16384*2/2-1
-        self['fpga2.jesd204_if.regfile_axi4_tlast_period'] = 16384*2/2-1
+        self['fpga1.jesd204_if.regfile_axi4_tlast_period'] = old_div(16384*2,2)-1
+        self['fpga2.jesd204_if.regfile_axi4_tlast_period'] = old_div(16384*2,2)-1
         self['fpga1.dsp_regfile.spead_tx_enable'] = 1
         self['fpga2.dsp_regfile.spead_tx_enable'] = 1
 
@@ -119,7 +124,7 @@ class Tile(object):
             # Test pattern. Tones on channels 72 & 75 + pseudo-random noise
             logging.info("Enabling test pattern")
             for generator in self.tpm.test_generator:
-                generator.set_tone(0, 72 * self._sampling_rate / 1024, 0.0)
+                generator.set_tone(0, old_div(72 * self._sampling_rate, 1024), 0.0)
                 generator.enable_prdg(0.4)
                 generator.channel_select(0xFFFF)
 
@@ -378,7 +383,7 @@ class Tile(object):
         devices = ["fpga1", "fpga2"]
 
         for f in devices:
-            self.tpm['%s.pps_manager.pps_gen_tc' % f] = int(self._sampling_rate) / 1 - 1
+            self.tpm['%s.pps_manager.pps_gen_tc' % f] = old_div(int(self._sampling_rate), 1) - 1
 
         while True:
             self.wait_pps_event()
@@ -543,8 +548,8 @@ class Tile(object):
 
                 if (this_error == 1 or this_error == 2 or this_error == 3) and previous_error == 0 and lo != -1:
 
-                    k = ((n - 1) - lo) / 2 + 1
-                    for x in range(k):
+                    k = old_div(((n - 1) - lo), 2) + 1
+                    for x in range(int(k)):
                         self.tpm['board.regfile.c2c_pll_ctrl'] = 0x010 + (phasesel << 8)
                         self.tpm['board.regfile.c2c_pll_ctrl'] = 0x011 + (phasesel << 8)
                         self.tpm['board.regfile.c2c_pll_ctrl'] = 0x010 + (phasesel << 8)
@@ -591,7 +596,7 @@ class Tile(object):
                      self.tpm["fpga2.pps_manager.timestamp_read_val"])
 
         # Set arm timestamp
-        delay = seconds * (1 / (32768 / 2 * 5 * 1e-9) / 256)
+        delay = seconds * (old_div(old_div(1, (old_div(32768, 2) * 5 * 1e-9)), 256))
         for fpga in self.tpm.tpm_fpga:
             fpga.fpga_apply_sync_delay(t0 + int(delay))
 
@@ -717,7 +722,7 @@ class Tile(object):
 
     def stop_raw_data(self):
         """ Stop sending raw data """
-        if 'RAW' in self._daq_threads.keys():
+        if 'RAW' in list(self._daq_threads.keys()):
             self._daq_threads['RAW'] = self._STOP
 
     # ---------------------------- Wrapper for data acquisition: CHANNEL ------------------------------------
@@ -760,7 +765,7 @@ class Tile(object):
 
         # Check if number of samples is a multiple of 32
         if number_of_samples % 32 != 0:
-            new_value = (int(number_of_samples / 32) + 1) * 32
+            new_value = (int(old_div(number_of_samples, 32)) + 1) * 32
             logging.warn("{} is not a multiple of 32, using {}".format(number_of_samples, new_value))
             number_of_samples = new_value
 
@@ -786,7 +791,7 @@ class Tile(object):
 
     def stop_channelised_data(self):
         """ Stop sending channelised data """
-        if 'CHANNEL' in self._daq_threads.keys():
+        if 'CHANNEL' in list(self._daq_threads.keys()):
             self._daq_threads['CHANNEL'] = self._STOP
 
     # ---------------------------- Wrapper for data acquisition: CONT CHANNEL ----------------------------
@@ -848,7 +853,7 @@ class Tile(object):
         """ Stop all data transmission from TPM"""
 
         logging.info("Stopping all transmission")
-        for k, v in self._daq_threads.iteritems():
+        for k, v in self._daq_threads.items():
             if v == self._RUNNING:
                 self._daq_threads[k] = self._STOP
         self.stop_channelised_data_continuous()
@@ -863,12 +868,12 @@ class Tile(object):
 
         for n in range(5):
             if current_delay <= ref_low:
-                new_delay = current_delay + n * 40 / 5
+                new_delay = current_delay + old_div(n * 40, 5)
                 new_tc = (current_tc + n) % 5
                 if new_delay >= ref_low:
                     return new_tc
             elif current_delay >= ref_hi:
-                new_delay = current_delay - n * 40 / 5
+                new_delay = current_delay - old_div(n * 40, 5)
                 new_tc = current_tc - n
                 if new_tc < 0:
                     new_tc += 5
@@ -881,7 +886,7 @@ class Tile(object):
 
     def test_generator_set_tone(self, dds, frequency=100e6, ampl=0.0, phase=0.0, delay=128):
         if self._ddc_frequency != 0:
-            translated_frequency = frequency - self._ddc_frequency + self._sampling_rate/(self._decimation_ratio*4.0)
+            translated_frequency = frequency - self._ddc_frequency + old_div(self._sampling_rate,(self._decimation_ratio*4.0))
         else:
             translated_frequency = frequency
 
@@ -937,37 +942,37 @@ class Tile(object):
         MUX = self['fpga1.poly.config1.mux']
         C = self['fpga1.poly.config2.coeff_data_width']
         MUX_PER_RAM = self['fpga1.poly.config2.coeff_mux_per_ram']
-        NOF_RAM_PER_STAGE = MUX / MUX_PER_RAM
+        NOF_RAM_PER_STAGE = old_div(MUX, MUX_PER_RAM)
         M = N*S
 
         base_width = C
         while base_width > 32:
             base_width /= 2
-        aspect_ratio_coeff = C / base_width
+        aspect_ratio_coeff = old_div(C, base_width)
 
         coeff = np.zeros(M, dtype=int)
         for i in range(M):
-            real_val = np.sinc((float(i) - float(M / 2)) / float(N))  # sinc
+            real_val = np.sinc((float(i) - float(old_div(M, 2))) / float(N))  # sinc
             real_val *= 0.5 - 0.5 * np.cos(2 * np.pi * float(i) / float(M))  # window
             real_val *= 2**(C - 1) - 1  # rescaling
             coeff[i] = int(real_val)
 
-        coeff_ram = np.zeros(N/NOF_RAM_PER_STAGE, dtype=int)
+        coeff_ram = np.zeros(old_div(N,NOF_RAM_PER_STAGE), dtype=int)
         for s in range(S):
             print("stage " + str(s))
             for ram in range(NOF_RAM_PER_STAGE):
                 print("ram " + str(ram))
                 idx = 0
                 for n in range(N):
-                    if (n % MUX) / MUX_PER_RAM == ram:
+                    if old_div((n % MUX), MUX_PER_RAM) == ram:
                         coeff_ram[idx] = coeff[N*s + n]
                         idx += 1
 
                 if aspect_ratio_coeff > 1:
-                    coeff_ram_arc = np.zeros(N/NOF_RAM_PER_STAGE*aspect_ratio_coeff, dtype=int)
-                    for n in range(N/NOF_RAM_PER_STAGE):
+                    coeff_ram_arc = np.zeros(old_div(N,NOF_RAM_PER_STAGE)*aspect_ratio_coeff, dtype=int)
+                    for n in range(old_div(N,NOF_RAM_PER_STAGE)):
                         for m in range(aspect_ratio_coeff):
-                            coeff_ram_arc[n * aspect_ratio_coeff + m] = coeff_ram[n] >> (m * C / aspect_ratio_coeff)
+                            coeff_ram_arc[n * aspect_ratio_coeff + m] = coeff_ram[n] >> (old_div(m * C, aspect_ratio_coeff))
                 else:
                     coeff_ram_arc = coeff_ram
 
@@ -982,7 +987,7 @@ class Tile(object):
 
     def set_fpga_sysref_gen(self, sysref_period):
         self['fpga1.pps_manager.sysref_gen_period'] = sysref_period-1
-        self['fpga1.pps_manager.sysref_gen_duty'] = sysref_period/2-1
+        self['fpga1.pps_manager.sysref_gen_duty'] = old_div(sysref_period,2)-1
         self['fpga1.pps_manager.sysref_gen.enable'] = 1
         self['fpga1.pps_manager.sysref_gen.spi_sync_enable'] = 1
         self['fpga1.pps_manager.sysref_gen.sysref_pol_invert'] = 0

@@ -1,3 +1,4 @@
+from __future__ import print_function
 from matplotlib import pyplot as plt
 import numpy as np
 import h5py
@@ -23,7 +24,7 @@ if __name__ == "__main__":
     with h5py.File(options.file, 'r') as f:
         dset = f['observation_data']
 
-        if "{}_spectra".format(options.dataset) not in dset.keys():
+        if "{}_spectra".format(options.dataset) not in list(dset.keys()):
             print("Data set {} does not exist".format(options.dataset))
             exit()
 

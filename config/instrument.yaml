@@ -15,9 +15,9 @@ vna:
 # TPM parameters
 spectrometer:
     name: tpm
-    ip: 10.0.10.3
+    ip: 10.0.10.2
     port: 10000
-    lmc_ip: 10.0.10.40
+    lmc_ip: 10.0.10.10
     lmc_port: 4660
     bitstream: itpm_v1_1_tpm_reach_wrap_v11.bit
     nof_frequency_channels: 16384

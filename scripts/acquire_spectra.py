@@ -1,3 +1,10 @@
+from __future__ import division
+from __future__ import print_function
+from builtins import hex
+from builtins import str
+from builtins import range
+from builtins import object
+from past.utils import old_div
 import time
 import math
 import socket
@@ -8,7 +15,7 @@ from struct import *
 from optparse import OptionParser
 
 
-class SpeadRx:
+class SpeadRx(object):
     def __init__(self, write_hdf5):
 
         self.write_hdf5 = write_hdf5
@@ -16,10 +23,10 @@ class SpeadRx:
         self.nof_signals = 4
         self.frequency_channels = 16*1024
         self.data_width = 64
-        self.data_byte = self.data_width / 8
+        self.data_byte = old_div(self.data_width, 8)
         self.byte_per_packet = 1024
-        self.word_per_packet = self.byte_per_packet / (self.data_width / 8)
-        self.expected_nof_packets = self.nof_signals * self.frequency_channels * (self.data_width / 8) / self.byte_per_packet
+        self.word_per_packet = old_div(self.byte_per_packet, (old_div(self.data_width, 8)))
+        self.expected_nof_packets = old_div(self.nof_signals * self.frequency_channels * (old_div(self.data_width, 8)), self.byte_per_packet)
 
         self.data_reassembled = np.zeros((2, 2*self.frequency_channels), dtype=np.uint64)
         self.data_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
@@ -93,20 +100,18 @@ class SpeadRx:
             elif spead_id == 0x3300:
                 self.offset = 9*8
             else:
-                print "Error in SPEAD header decoding!"
-                print "Unexpected item " + hex(spead_item) + " at position " + str(idx)
+                print("Error in SPEAD header decoding!")
+                print("Unexpected item " + hex(spead_item) + " at position " + str(idx))
 
     def write_buff(self, data):
         idx = self.start_channel_id * 2
-        self.data_reassembled[self.start_antenna_id / 2, idx:idx + (self.payload_length / self.data_byte)] = data
+        self.data_reassembled[old_div(self.start_antenna_id, 2), idx:idx + (old_div(self.payload_length, self.data_byte))] = data
         self.recv_packets += 1
-        print self.recv_packets
-        print self.expected_nof_packets
 
     def buffer_demux(self):
         for b in range(2):
             for n in range(2*self.frequency_channels):
-                self.data_buff_scrambled[(n % 2) + 2*b, n / 2] = self.data_reassembled[b, n]
+                self.data_buff_scrambled[(n % 2) + 2*b, old_div(n, 2)] = self.data_reassembled[b, n]
         self.data_buff = self.data_buff_scrambled
         # for b in range(self.nof_signals):
         #     lo_idx = 0
@@ -132,16 +137,11 @@ class SpeadRx:
     def bit_reversal(self):
         bit_width = int(np.log2(self.frequency_channels))
         bit_format = '{:0' + str(bit_width) + 'b}'
-        print bit_format
-        print int(bit_format.format(8192)[::-1], 2)
         temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
         for b in range(4):
             for n in range(self.frequency_channels):
                 channel = int(bit_format.format(n)[::-1], 2)
                 temp_buff[b, channel] = self.data_buff[b, n]
-                #print n
-                #print channel
-                #raw_input()
         self.data_buff = temp_buff
 
     def buff_descramble(self):
@@ -149,9 +149,9 @@ class SpeadRx:
         for b in range(4):
             for n in range(self.frequency_channels):
                 if n % 2 == 0:
-                    channel = n / 2
+                    channel = old_div(n, 2)
                 else:
-                    channel = n / 2 + self.frequency_channels / 2
+                    channel = old_div(n, 2) + old_div(self.frequency_channels, 2)
                 temp_buff[b, channel] = self.data_buff[b, n]
         self.data_buff = temp_buff
 
@@ -164,13 +164,13 @@ class SpeadRx:
                 _pkt, _addr = sock.recvfrom(1024*10)
                 packet_ok = 1
             except socket.timeout:
-                print "socket timeout!"
+                print("socket timeout!")
 
             if packet_ok:
                 self.spead_header_decode(_pkt)
 
                 if self.is_spead:
-                    self.write_buff(unpack('<' + 'q' * (self.payload_length / 8), _pkt[self.offset:]))
+                    self.write_buff(unpack('<' + 'q' * (old_div(self.payload_length, 8)), _pkt[self.offset:]))
                     buffer_ready = self.detect_full_buffer()
                     if buffer_ready: # channelized data
                         self.buffer_demux()
@@ -179,7 +179,7 @@ class SpeadRx:
                         if self.write_hdf5:
                             self.hdf5_channel.create_dataset(str(self.timestamp), data=self.data_buff)
                         num += 1
-                        print "Full buffer received: " + str(num)
+                        print("Full buffer received: " + str(num))
 
                         plt.figure(0)
                         plt.clf()

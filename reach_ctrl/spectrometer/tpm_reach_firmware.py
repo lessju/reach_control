@@ -1,3 +1,7 @@
+from __future__ import division
+from builtins import hex
+from builtins import range
+from past.utils import old_div
 from math import ceil
 
 __author__ = 'Alessio Magro'
@@ -75,11 +79,11 @@ class TpmReachFirmware(FirmwareBlock):
         #                   self.board.load_plugin("TpmTenGCore", device=self._device, core=1),
         #                   self.board.load_plugin("TpmTenGCore", device=self._device, core=2),
         #                   self.board.load_plugin("TpmTenGCore", device=self._device, core=3)]
-        self._testgen = self.board.load_plugin("TpmTestGenerator", device=self._device, fsample=self._fsample/(self._decimation*self._adc_clock_divider))
+        self._testgen = self.board.load_plugin("TpmTestGenerator", device=self._device, fsample=old_div(self._fsample,(self._decimation*self._adc_clock_divider)))
         self._sysmon = self.board.load_plugin("TpmSysmon", device=self._device)
         self._patterngen = self.board.load_plugin("TpmPatternGenerator", device=self._device)
-        self._power_meter = self.board.load_plugin("AdcPowerMeterSimple", device=self._device, fsample=self._fsample/(self._decimation*self._adc_clock_divider), samples_per_frame=32768)
-        self._integrator = self.board.load_plugin("TpmIntegrator", device=self._device, fsample=self._fsample/(self._decimation*self._adc_clock_divider), nof_frequency_channels=16384, oversampling_factor=1.0)
+        self._power_meter = self.board.load_plugin("AdcPowerMeterSimple", device=self._device, fsample=old_div(self._fsample,(self._decimation*self._adc_clock_divider)), samples_per_frame=32768)
+        self._integrator = self.board.load_plugin("TpmIntegrator", device=self._device, fsample=old_div(self._fsample,(self._decimation*self._adc_clock_divider)), nof_frequency_channels=16384, oversampling_factor=1.0)
 
         self._device_name = "fpga1" if self._device is Device.FPGA_1 else "fpga2"
 
@@ -143,7 +147,7 @@ class TpmReachFirmware(FirmwareBlock):
 
             # Initialise FPGAs
             # I have no idea what these ranges are
-            self._fpga.fpga_start(range(16), range(16))
+            self._fpga.fpga_start(list(range(16)), list(range(16)))
 
             retries += 1
             sleep(0.2)
@@ -201,14 +205,14 @@ class TpmReachFirmware(FirmwareBlock):
         :param round_bits: number of bits rounded after filter
         :param number_of_samples: samples per lmc packet
         """
-        channel_spacing = 800e6/1024
+        channel_spacing = old_div(800e6,1024)
         downsampling_factor = 128
         # Number of LO steps in the channel spacing
         lo_steps_per_channel = 2.**24/32.*27    
         if band_frequency < 50e6 or band_frequency > 350e6: 
             logging.error("Invalid frequency for narrowband lmc. Must be between 50e6 and 350e6")
             return
-        hw_frequency = band_frequency/channel_spacing
+        hw_frequency = old_div(band_frequency,channel_spacing)
         channel_id = int(round(hw_frequency))
         lo_frequency = int(round((hw_frequency - channel_id)*lo_steps_per_channel)) &0xffffff
         # self.board["%s.lmc_gen.channelized_single_channel_mode.enable" % self._device_name] = 1

@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+from builtins import object
 import numpy as np
 import logging
 import time
@@ -11,7 +12,7 @@ from reach_ctrl.reach_config import REACHConfig
 
 __author__ = 'Alessio Magro'                     
 
-class Spectrometer:
+class Spectrometer(object):
 
     def __init__(self, ip, port, lmc_ip, lmc_port, sampling_rate=800e6):
         """ Class which interfaces with TPM and spectrometer firmware """
