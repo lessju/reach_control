@@ -1,10 +1,3 @@
-from __future__ import division
-from __future__ import print_function
-from builtins import hex
-from builtins import str
-from builtins import range
-from builtins import object
-from past.utils import old_div
 import time
 import math
 import socket
@@ -15,22 +8,23 @@ from struct import *
 from optparse import OptionParser
 
 
-class SpeadRx(object):
-    def __init__(self, write_hdf5):
+class SpeadRx:
+    def __init__(self, write_hdf5, nof_fpga):
 
         self.write_hdf5 = write_hdf5
 
-        self.nof_signals = 4
+        self.nof_signals = 2 * nof_fpga
         self.frequency_channels = 16*1024
         self.data_width = 64
-        self.data_byte = old_div(self.data_width, 8)
+        self.data_byte = self.data_width / 8
         self.byte_per_packet = 1024
-        self.word_per_packet = old_div(self.byte_per_packet, (old_div(self.data_width, 8)))
-        self.expected_nof_packets = old_div(self.nof_signals * self.frequency_channels * (old_div(self.data_width, 8)), self.byte_per_packet)
+        self.word_per_packet = self.byte_per_packet / (self.data_width / 8)
+        self.expected_nof_packets = self.nof_signals * self.frequency_channels * (self.data_width / 8) / self.byte_per_packet
 
-        self.data_reassembled = np.zeros((2, 2*self.frequency_channels), dtype=np.uint64)
+        self.data_reassembled = np.zeros((self.nof_signals / 2, 2*self.frequency_channels), dtype=np.uint64)
         self.data_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
         self.data_buff_scrambled = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
+        self.data_buff_accu = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
 
         self.line = [0]*self.nof_signals
         self.recv_packets = 0
@@ -55,14 +49,10 @@ class SpeadRx(object):
         self.buffer_id = 0
         if self.write_hdf5:
             _time = time.strftime("%Y%m%d_%H%M%S")
-            self.hdf5_channel = h5py.File('channel_data_' + _time + '.h5', 'a')
+            self.hdf5_file_name = 'channel_data_' + _time + '.h5'
+            self.hdf5_channel = h5py.File(self.hdf5_file_name, 'a')
 
         plt.ion()
-        #for n in range(self.nof_signals):
-        #    plt.figure(n)
-        #    plt.title("Integrated Channelized data " + str(n))
-        #    self.line[n], = plt.plot([0]*self.frequency_channels)
-        #    self.line[n].set_xdata(np.arange(self.frequency_channels))
         plt.figure(0)
         plt.title("Integrated Channelized data")
         self.line[0], = plt.plot([0]*self.frequency_channels)
@@ -94,24 +84,28 @@ class SpeadRx(object):
             elif spead_id == 0xA002:
                 self.start_channel_id = (val & 0x000000FFFF000000) >> 24
                 self.start_antenna_id = (val & 0x000000000000FF00) >> 8
-                #self.start_antenna_id /= 2
             elif spead_id == 0xA003 or spead_id == 0xA001:
                 self.buffer_id = (val & 0xFFFFFFFF) >> 16
             elif spead_id == 0x3300:
                 self.offset = 9*8
             else:
-                print("Error in SPEAD header decoding!")
-                print("Unexpected item " + hex(spead_item) + " at position " + str(idx))
+                print "Error in SPEAD header decoding!"
+                print "Unexpected item " + hex(spead_item) + " at position " + str(idx)
+        if self.start_antenna_id >= self.nof_signals:
+            # print "Dropping packet from FPGA2"
+            self.is_spead = 0
 
     def write_buff(self, data):
         idx = self.start_channel_id * 2
-        self.data_reassembled[old_div(self.start_antenna_id, 2), idx:idx + (old_div(self.payload_length, self.data_byte))] = data
+        self.data_reassembled[self.start_antenna_id / 2, idx:idx + (self.payload_length / self.data_byte)] = data
         self.recv_packets += 1
+        # print self.recv_packets
+        # print self.expected_nof_packets
 
     def buffer_demux(self):
-        for b in range(2):
+        for b in range(self.nof_signals / 2):
             for n in range(2*self.frequency_channels):
-                self.data_buff_scrambled[(n % 2) + 2*b, old_div(n, 2)] = self.data_reassembled[b, n]
+                self.data_buff_scrambled[(n % 2) + 2*b, n / 2] = self.data_reassembled[b, n]
         self.data_buff = self.data_buff_scrambled
         # for b in range(self.nof_signals):
         #     lo_idx = 0
@@ -137,61 +131,75 @@ class SpeadRx(object):
     def bit_reversal(self):
         bit_width = int(np.log2(self.frequency_channels))
         bit_format = '{:0' + str(bit_width) + 'b}'
+        print bit_format
+        print int(bit_format.format(8192)[::-1], 2)
         temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
         for b in range(4):
             for n in range(self.frequency_channels):
                 channel = int(bit_format.format(n)[::-1], 2)
                 temp_buff[b, channel] = self.data_buff[b, n]
+                #print n
+                #print channel
+                #raw_input()
         self.data_buff = temp_buff
 
     def buff_descramble(self):
         temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
-        for b in range(4):
+        for b in range(self.nof_signals):
             for n in range(self.frequency_channels):
                 if n % 2 == 0:
-                    channel = old_div(n, 2)
+                    channel = n / 2
                 else:
-                    channel = old_div(n, 2) + old_div(self.frequency_channels, 2)
+                    channel = n / 2 + self.frequency_channels / 2
                 temp_buff[b, channel] = self.data_buff[b, n]
         self.data_buff = temp_buff
 
 
-    def run(self, sock):
+    def run(self, sock, accu=1, nof_samples=-1):
         num = 0
-        while True:
+        accu_num = 0
+        while accu_num < nof_samples or nof_samples <= 0:
             packet_ok = 0
             try:
                 _pkt, _addr = sock.recvfrom(1024*10)
                 packet_ok = 1
             except socket.timeout:
-                print("socket timeout!")
+                print "socket timeout!"
 
             if packet_ok:
                 self.spead_header_decode(_pkt)
 
                 if self.is_spead:
-                    self.write_buff(unpack('<' + 'q' * (old_div(self.payload_length, 8)), _pkt[self.offset:]))
+                    self.write_buff(unpack('<' + 'q' * (self.payload_length / 8), _pkt[self.offset:]))
                     buffer_ready = self.detect_full_buffer()
                     if buffer_ready: # channelized data
                         self.buffer_demux()
                         self.buff_descramble()
-                        # self.bit_reversal()
-                        if self.write_hdf5:
-                            self.hdf5_channel.create_dataset(str(self.timestamp), data=self.data_buff)
+
                         num += 1
-                        print("Full buffer received: " + str(num))
+                        print "Full buffer received: " + str(num)
+
+                        if num % accu == 1 or accu == 1:
+                            self.data_buff_accu = self.data_buff
+                        else:
+                            self.data_buff_accu += self.data_buff
+
+                        if num % accu == 0 or accu == 1:
+                            accu_num += 1
+                            print "Full integration " + str(accu_num) + " ready"
+                            if self.write_hdf5:
+                                self.hdf5_channel.create_dataset(str(self.timestamp), data=self.data_buff_accu)
 
                         plt.figure(0)
                         plt.clf()
                         plt.title("Integrated Channelized data %d" % num)
-                        
 
-                        for b in range(4):
+                        for b in range(self.nof_signals):
                             for n in range(self.nof_signals):
                                 log_plot = np.zeros(self.frequency_channels)
                                 for n in range(self.frequency_channels):
                                     if self.data_buff[b, n] > 0:
-                                        log_plot[n] = 10*np.log10(self.data_buff[b, n])
+                                        log_plot[n] = 10*np.log10(self.data_buff_accu[b, n])
                                     else:
                                         log_plot[n] = 0.0
                             plt.plot(log_plot.tolist())
@@ -199,7 +207,8 @@ class SpeadRx(object):
                         plt.draw()
                         plt.pause(0.0001)
 
-        self.hdf5_channel.close()
+        if self.write_hdf5:
+            self.hdf5_channel.close()
 
 if __name__ == "__main__":
     parser = OptionParser()
@@ -207,11 +216,24 @@ if __name__ == "__main__":
                       dest="port",
                       default="4660",
                       help="UDP port")
+    parser.add_option("-a",
+                      dest="accu",
+                      default="1",
+                      help="Number of spectra to accumulate")
     parser.add_option("-w",
                       dest="write_hdf5",
                       default=False,
                       action="store_true",
                       help="Write HDF5 files")
+    parser.add_option("-i",
+                      dest="ignore_fpga2",
+                      default=False,
+                      action="store_true",
+                      help="Ignore data from FPGA2")
+    parser.add_option("-n",
+                      dest="num",
+                      default="-1",
+                      help="Number of accumulated samples")
 
     (options, args) = parser.parse_args()
 
@@ -220,6 +242,9 @@ if __name__ == "__main__":
     sock.settimeout(1)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2*1024*1024)
 
-    spead_rx_inst = SpeadRx(options.write_hdf5)
+    nof_fpga = 2
+    if options.ignore_fpga2:
+        nof_fpga = 1
+    spead_rx_inst = SpeadRx(options.write_hdf5, nof_fpga)
 
-    spead_rx_inst.run(sock)
+    spead_rx_inst.run(sock, int(options.accu), int(options.num))
