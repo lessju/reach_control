@@ -81,7 +81,7 @@ class Spectrometer(object):
         self._tile['fpga2.dsp_regfile.channelizer_fft_bit_round'] = 0xFFFF
         self._tile['board.regfile.ethernet_pause'] = 8000
 
-    def acquire_sectrum(self, channel=0, nof_seconds=1):
+    def acquire_spectrum(self, channel=0, nof_seconds=1):
         """ Acquire spectra for defined number of seconds """
 
         # Start receiver
@@ -92,7 +92,7 @@ class Spectrometer(object):
 
         # Wait for receiver to finish
         # Spectra will be received in spectra/signals/channel order
-        timestamps, spectra = self._spectra.stop_receiver()
+        timestamps, spectra = self._spectra.wait_for_receiver()
 
         # TODO: Stop data transmission 
         # ...

@@ -266,7 +266,7 @@ class REACHObservation:
             self._enable_source(source)
 
         # Get spectrum and save to file
-        timestamps, spectra = self._spectrometer.acquire_sectrum(nof_seconds=duration)
+        timestamps, spectra = self._spectrometer.acquire_spectrum(nof_seconds=duration)
         self._add_spectrum_to_file(spectra, name, timestamps[0])
 
         logging.info("Measured spectrum for {}".format(name))

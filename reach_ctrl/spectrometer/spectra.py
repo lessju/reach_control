@@ -99,7 +99,7 @@ class Spectra(object):
             # If the buffer is full, finalize packet buffer
             if self._detect_full_buffer():
                 self._finalise_buffer()
-                return self._timestamp, self._data_buffer
+                return self._sync_time + self._timestamp * 32768 * 2.5e-9, self._data_buffer
 
     def _receive_spectra_threaded(self, nof_spectra=1):
         """ Receive specified number of thread, should run in a separate thread """
@@ -116,8 +116,8 @@ class Spectra(object):
         self._receiver_thread = threading.Thread(target=self._receive_spectra_threaded, args=(nof_spectra, ))
         self._receiver_thread.start()
         
-    def stop_receiver(self):
-        """ Stop receiver """
+    def wait_for_receiver(self):
+        """ Wait for receiver to finish """
         if self._receiver_thread is None:
             logging.error("Receiver not started")
         
