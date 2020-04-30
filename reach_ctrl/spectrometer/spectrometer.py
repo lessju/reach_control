@@ -49,7 +49,7 @@ class Spectrometer(object):
         else:
             logging.error("Could not load bitfile {}, check filepath".format(bitfile))
 
-    def initialise(self, channel_truncation=2, integration_time=1, ada_gain=None):
+    def initialise(self, channel_truncation=2, integration_time=1, channel_scaling=0xFFFF, ada_gain=None):
         """ Initialise the TPM and spectrometer firmware """
 
         logging.info("Initialising TPM")
@@ -79,8 +79,8 @@ class Spectrometer(object):
         self._tile.start_acquisition()
 
         self._tile.load_default_poly_coeffs()
-        self._tile['fpga1.dsp_regfile.channelizer_fft_bit_round'] = 0xFFFF
-        self._tile['fpga2.dsp_regfile.channelizer_fft_bit_round'] = 0xFFFF
+        self._tile['fpga1.dsp_regfile.channelizer_fft_bit_round'] = channel_scaling
+        self._tile['fpga2.dsp_regfile.channelizer_fft_bit_round'] = channel_scaling
         self._tile['board.regfile.ethernet_pause'] = 8000
 
     def acquire_spectrum(self, channel=0, nof_seconds=1):
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     
     # Initialise TPM if required
     if command_line_args.initialise:
-        tile.initialise(int(conf['channel_truncation']), int(conf['integration_time']), int(conf['ada_gain']))
+        tile.initialise(int(conf['channel_truncation']), int(conf['integration_time']), int(conf['channel_scaling']), int(conf['ada_gain']))
 
     # Connect to board
     tile.connect()

@@ -412,6 +412,7 @@ class REACHObservation:
             self._spectrometer.program(bitstream)
             self._spectrometer.initialise(channel_truncation=conf['channel_truncation'],
                                           integration_time=conf['integration_time'],
+                                          channel_scaling=conf['channel_scaling'],
                                           ada_gain=conf['ada_gain'])
 
         logging.info("Initialised spectrometer")

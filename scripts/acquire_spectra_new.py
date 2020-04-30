@@ -4,12 +4,27 @@ from reach_ctrl.reach_config import REACHConfig
 
 import matplotlib.pyplot as plt
 import numpy as np
+import threading
 import datetime
 import logging
+import signal
 import time
 import h5py
 import os
 
+# Global pointer to data_file
+data_file_name = None
+
+# Global pointer to spectrometer
+spectrometer = None
+
+# Global thread stop flag
+stop_acquisition = False
+
+def _signal_handler(signum, frame):
+    global stop_acquisition
+    logging.info("Received interrupt, stopping acqusition")
+    stop_acquisition = True
 
 def create_output_file(data_file_name, name="test"):
     """ Create HDF5 output file """
@@ -28,11 +43,12 @@ def create_output_file(data_file_name, name="test"):
     logging.info("Created output file")
 
 
-def add_spectrum_to_file(data_file_name, spectrum, timestamp, name="test"):
+def add_spectrum_to_file(spectrum, timestamp, name="test"):
     """ Add spectrum to data file 
     :param spectrum: The spectrum
     :param name: The data name
-    :param timestamp: Spectrum timestsamp """
+    :param timestamp: Spectrum timestsamp
+    :param name: Input source name """
 
     nof_frequency_channels = REACHConfig()['spectrometer']['nof_frequency_channels']
 
@@ -67,6 +83,61 @@ def add_spectrum_to_file(data_file_name, spectrum, timestamp, name="test"):
         dset[-1] = timestamp
 
 
+def add_rms_to_file(rms, timestamp, name="test"):
+    """ Add RMS to data file
+    :param spectrum: The spectrum
+    :param name: The data name
+    :param timestamp: Spectrum timestsamp
+    :param name: Input source name """
+
+    # Sanity check on rms
+    if len(rms) == 0:
+        return
+
+    with h5py.File(data_file_name, 'a') as f:
+        # Create dataset names
+        dataset_name = "{}_rms".format(name)
+
+        # Load observation data group
+        dset = f['observation_info']
+
+        # If data sets do not exist, add them
+        if dataset_name not in dset.keys():
+            dset.create_dataset(dataset_name,
+                                (0, 5),
+                                maxshape=(None, 5),
+                                chunks=True,
+                                dtype='f8')
+
+            logging.info("Added {} dataset to output file".format(dataset_name))
+
+        # Add spectrum and timestamp to buffer
+        dset = f['observation_info/{}'.format(dataset_name)]
+        dset.resize((dset.shape[0] + 1, dset.shape[1]))
+        dset[-1, 0] = timestamp
+        dset[-1, 1:] = rms
+
+
+def monitor_rms(cadence):
+    """ Monitor RMS thread
+    :param cadence: Time between measurements """
+    global stop_acquisition
+
+    # While acquiring
+    while not stop_acquisition:
+        # Get RMS
+        rms = spectrometer._tile.get_adc_rms()
+
+        # Get timestamp
+        timestamp = time.time()
+
+        # Add RMS to file
+        add_rms_to_file(rms, timestamp)
+
+        # Sleep for required time
+        time.sleep(cadence)
+
+
 if __name__ == "__main__":
 
     # Use OptionParse to get command-line arguments
@@ -82,6 +153,8 @@ if __name__ == "__main__":
                       help="Number of accumulated samples (default: -1)")
     parser.add_option("-f", dest="output", default="", 
                       help="Write spectra to file using provided filename (default: No output)")
+    parser.add_option("--rms-cadence", dest="rms_cadence", type=int, default=-1, 
+                      help="Number of seconds between RMS measurements (default: -1 seconds, do not record)")
     (options, args) = parser.parse_args()
 
     # Initialise REACH config
@@ -103,8 +176,12 @@ if __name__ == "__main__":
         spectrometer.program(bitstream)
         spectrometer.initialise(channel_truncation=conf['channel_truncation'],
                                 integration_time=conf['integration_time'],
+                                channel_scaling=conf['channel_scaling'],
                                 ada_gain=conf['ada_gain'])
         logging.info("Initialised spectrometer")
+
+        # Connect to spectrometer
+        spectrometer.connect()
 
         # Hack, get existing spectrum receive
         spectra = spectrometer._spectra
@@ -122,6 +199,28 @@ if __name__ == "__main__":
     if options.output != "":
         options.output = "{}.hdf5".format(options.output)
         create_output_file(options.output)
+        data_file_name = options.output
+
+    # Sanity check on RMS measurements
+    if options.rms_cadence != -1:
+        if options.output == "":
+            logging.warning("RMS monitoring can only be enabled when writing to file, ignoring")
+            options.rms_cadence = False
+        else:
+            # If spectrometer is not connected, connect it
+            spectrometer = Spectrometer(ip=conf['ip'], 
+                                        port=conf['port'],
+                                        lmc_ip=conf['lmc_ip'], 
+                                        lmc_port=conf['lmc_port'],
+                                        enable_spectra=False)
+            spectrometer.connect()
+
+            # Create RMS thread
+            rms_thread = threading.Thread(target=monitor_rms, args=(options.rms_cadence, ))
+            rms_thread.start()
+
+    # Wait for exit or termination
+    signal.signal(signal.SIGINT, _signal_handler)
 
     # Kickstart plotting
     plt.figure()
@@ -138,7 +237,7 @@ if __name__ == "__main__":
 
         # If writing to file, add
         if options.output != "":
-            add_spectrum_to_file(options.output, data, timestamps[0], name="test")
+            add_spectrum_to_file(data, timestamps[0], name="test")
 
         data = 10 * np.log10(data)
 
@@ -156,6 +255,10 @@ if __name__ == "__main__":
         plt.pause(0.0001)
 
         logging.info("Received accumulated spectrum")
+
+        # Stop if Ctrl-C was issued
+        if stop_acquisition:
+            break
 
     # Finished acquiring data
     logging.info("Finished acquiring data. Press Enter to quit")
