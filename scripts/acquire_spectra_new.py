@@ -50,7 +50,7 @@ def add_spectrum_to_file(data_file_name, spectrum, timestamp, name="test"):
                                 (4, 0, nof_frequency_channels),
                                 maxshape=(4, None, nof_frequency_channels),
                                 chunks=True,
-                                dtype='u8')
+                                dtype='f8')
 
             dset.create_dataset(timestamp_name, (0,),
                                 maxshape=(None,), chunks=True, dtype='f8')
@@ -134,11 +134,13 @@ if __name__ == "__main__":
         timestamps, data = spectra.wait_for_receiver()
 
         # # Generate accumulated spectra
-        data = 10 * np.log10(np.sum(data, axis=0))
+        data = np.sum(data, axis=0)
 
         # If writing to file, add
         if options.output != "":
             add_spectrum_to_file(options.output, data, timestamps[0], name="test")
+
+        data = 10 * np.log10(data)
 
         # Update plot
         plt.clf()
@@ -154,6 +156,10 @@ if __name__ == "__main__":
         plt.pause(0.0001)
 
         logging.info("Received accumulated spectrum")
+
+    # Finished acquiring data
+    logging.info("Finished acquiring data. Press Enter to quit")
+    input()
 
 
 

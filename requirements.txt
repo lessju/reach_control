@@ -7,3 +7,5 @@ pyvisa
 pyvisa-py
 pyserial
 pyyaml
+matplotlib
+future

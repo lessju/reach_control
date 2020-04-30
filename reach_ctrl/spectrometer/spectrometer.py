@@ -14,15 +14,17 @@ __author__ = 'Alessio Magro'
 
 class Spectrometer(object):
 
-    def __init__(self, ip, port, lmc_ip, lmc_port, sampling_rate=800e6):
+    def __init__(self, ip, port, lmc_ip, lmc_port, enable_spectra=True, sampling_rate=800e6):
         """ Class which interfaces with TPM and spectrometer firmware """
 
         # Create Tile
         self._tile = Tile(ip=ip, port=port, lmc_ip=lmc_ip, lmc_port=lmc_port, sampling_rate=sampling_rate)
 
         # Create and initialise receiver
-        self._spectra = Spectra(ip=lmc_ip, port=lmc_port)
-        self._spectra.initialise()
+        self._spectra = None
+        if enable_spectra:
+            self._spectra = Spectra(ip=lmc_ip, port=lmc_port)
+            self._spectra.initialise()
 
     def connect(self):
         """ Connect to TPM """
@@ -84,6 +86,10 @@ class Spectrometer(object):
     def acquire_spectrum(self, channel=0, nof_seconds=1):
         """ Acquire spectra for defined number of seconds """
 
+        if self._spectra is None:
+            logging.warning("Cannot acquire spectra. Acqusition not initialised")
+            return None
+
         # Start receiver
         self._spectra.start_receiver(nof_seconds)
 
@@ -116,24 +122,26 @@ if __name__ == "__main__":
                       default=False, help="Program CPLD (cannot be used with other options) [default: False]")
     parser.add_option("-I", "--initialise", action="store_true", dest="initialise",
                       default=False, help="Initialise TPM [default: False]")
+    parser.add_option("-S", "--enable-spectra", action="store_true", dest="spectra",
+                      default=False, help="Enable acqusition of spectra on this connection [default: False]")
     (command_line_args, args) = parser.parse_args(argv[1:])
 
     # Initialise REACH config
     conf = REACHConfig()['spectrometer']
     
     # Create tile instance
-    tile = Spectrometer(conf['ip'], int(conf['port']), conf['lmc_ip'], int(conf['lmc_port']))
+    tile = Spectrometer(conf['ip'], int(conf['port']), conf['lmc_ip'], int(conf['lmc_port']), enable_spectra=command_line_args.spectra)
 
     # Program CPLD
     if command_line_args.program_cpld:
         logging.info("Programming CPLD")
-        tile.program_cpld(os.path.join(os.path.expanduser(os.environ['REACH_CONFIG_DIRECTORY']), conf['bitstream']))
+        tile.program_cpld(command_line_args.bitfile)
 
     # Program FPGAs if required
     if command_line_args.program:
         logging.info("Programming FPGAs")
         tile.program(os.path.join(os.path.expanduser(os.environ['REACH_CONFIG_DIRECTORY']), conf['bitstream']))
-        
+    
     # Initialise TPM if required
     if command_line_args.initialise:
         tile.initialise(int(conf['channel_truncation']), int(conf['integration_time']), int(conf['ada_gain']))

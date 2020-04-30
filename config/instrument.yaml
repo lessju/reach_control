@@ -3,7 +3,7 @@
 # VNA parameters
 vna:
     name: vna0
-    gui_path: C:\VNA\TRVNA\TRVNA.exe
+    gui_path: /home/reach/Software/CMT_TRVNA_19.2.1_x86_64.appimage
     channel: 1
     freqstart: 40
     freqstop: 180
@@ -17,7 +17,7 @@ spectrometer:
     name: tpm
     ip: 10.0.10.2
     port: 10000
-    lmc_ip: 10.0.10.10
+    lmc_ip: 10.0.10.100
     lmc_port: 4660
     bitstream: itpm_v1_1_tpm_reach_wrap_v11.bit
     nof_frequency_channels: 16384

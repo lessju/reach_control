@@ -20,7 +20,7 @@ setup_args = {
     'url' : "https://github.com/lessju/reach_control",
     'packages' : find_packages(),
     'include_package_data' : True,
-    'scripts':glob.glob('scripts/*'),
+    'scripts':glob.glob('scripts/*.py'),
     'install_requires':read('requirements.txt').splitlines(),
     'long_description':read('README.md'),
     'classifiers':[
