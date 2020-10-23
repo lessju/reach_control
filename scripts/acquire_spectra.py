@@ -9,22 +9,19 @@ from optparse import OptionParser
 
 
 class SpeadRx:
-    def __init__(self, write_hdf5, nof_fpga):
+    def __init__(self, write_hdf5, nof_fpga, show_plot=True):
 
         self.write_hdf5 = write_hdf5
 
-        self.nof_signals = 2 * nof_fpga
+        self.nof_fpga = nof_fpga
+        self.nof_signals_per_fpga = 1
+        self.nof_signals = self.nof_signals_per_fpga * nof_fpga
         self.frequency_channels = 16*1024
         self.data_width = 64
-        self.data_byte = self.data_width / 8
+        self.data_byte = int(self.data_width / 8)
         self.byte_per_packet = 1024
-        self.word_per_packet = self.byte_per_packet / (self.data_width / 8)
-        self.expected_nof_packets = self.nof_signals * self.frequency_channels * (self.data_width / 8) / self.byte_per_packet
-
-        self.data_reassembled = np.zeros((self.nof_signals / 2, 2*self.frequency_channels), dtype=np.uint64)
-        self.data_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
-        self.data_buff_scrambled = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
-        self.data_buff_accu = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
+        self.word_per_packet = int(self.byte_per_packet / self.data_byte)
+        self.expected_nof_packets = int(self.nof_signals * self.frequency_channels * self.data_byte / self.byte_per_packet)
 
         self.line = [0]*self.nof_signals
         self.recv_packets = 0
@@ -43,22 +40,37 @@ class SpeadRx:
         self.pkt_cnt = 0
         self.logical_channel_id = 0
         self.packet_counter = 0
+        self.start_antenna_id = 0
         self.id = 0
         self.is_spead = 0
         self.processed_frame = 0
         self.buffer_id = 0
+        self.is_floating_point = 0
+        self.first_packet = True
         if self.write_hdf5:
             _time = time.strftime("%Y%m%d_%H%M%S")
             self.hdf5_file_name = 'channel_data_' + _time + '.h5'
             self.hdf5_channel = h5py.File(self.hdf5_file_name, 'a')
 
-        plt.ion()
-        plt.figure(0)
-        plt.title("Integrated Channelized data")
-        self.line[0], = plt.plot([0]*self.frequency_channels)
-        self.line[0].set_xdata(np.arange(self.frequency_channels))
+        self.show_plot = show_plot
+        if show_plot:
+            plt.ion()
+            plt.figure(0)
+            plt.title("Integrated Channelized data")
+            self.line[0], = plt.plot([0]*self.frequency_channels)
+            self.line[0].set_xdata(np.arange(self.frequency_channels))
 
-
+    def allocate_buffers(self):
+        self.first_packet = False
+        if self.is_floating_point == 1:
+            self.data_type = np.double  # np.uint64
+        else:
+            self.data_type = np.uint64
+        self.data_reassembled = np.zeros((self.nof_fpga, self.nof_signals_per_fpga * self.frequency_channels),
+                                         dtype=self.data_type)
+        self.data_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=self.data_type)
+        self.data_buff_scrambled = np.zeros((self.nof_signals, self.frequency_channels), dtype=self.data_type)
+        self.data_buff_accu = np.zeros((self.nof_signals, self.frequency_channels), dtype=self.data_type)
 
     def spead_header_decode(self, pkt):
         items = unpack('>' + 'Q'*9, pkt[0:8*9])
@@ -80,7 +92,10 @@ class SpeadRx:
             elif spead_id == 0x9600:
                 self.timestamp = val
             elif spead_id == 0xA004:
-                self.capture_mode = val
+                self.capture_mode = val & 0xEF
+                self.is_floating_point = (val >> 7) & 0x1
+                if self.first_packet:
+                    self.allocate_buffers()
             elif spead_id == 0xA002:
                 self.start_channel_id = (val & 0x000000FFFF000000) >> 24
                 self.start_antenna_id = (val & 0x000000000000FF00) >> 8
@@ -96,27 +111,18 @@ class SpeadRx:
             self.is_spead = 0
 
     def write_buff(self, data):
-        idx = self.start_channel_id * 2
-        self.data_reassembled[self.start_antenna_id / 2, idx:idx + (self.payload_length / self.data_byte)] = data
+        idx = self.start_channel_id * self.nof_signals_per_fpga
+        self.data_reassembled[self.start_antenna_id / self.nof_signals_per_fpga, idx:idx + (self.payload_length / self.data_byte)] = data
         self.recv_packets += 1
-        # print self.recv_packets
-        # print self.expected_nof_packets
 
     def buffer_demux(self):
-        for b in range(self.nof_signals / 2):
-            for n in range(2*self.frequency_channels):
-                self.data_buff_scrambled[(n % 2) + 2*b, n / 2] = self.data_reassembled[b, n]
-        self.data_buff = self.data_buff_scrambled
-        # for b in range(self.nof_signals):
-        #     lo_idx = 0
-        #     hi_idx = self.frequency_channels / 2
-        #     for n in range(self.frequency_channels):
-        #         if (n % 4) < 2:
-        #             self.data_buff[b, lo_idx] = self.data_buff_scrambled[b, n]
-        #             lo_idx += 1
-        #         else:
-        #             self.data_buff[b, hi_idx] = self.data_buff_scrambled[b, n]
-        #             hi_idx += 1
+        if self.nof_signals_per_fpga == 1:
+            self.data_buff = self.data_reassembled
+        else:
+            for b in range(self.nof_fpga):
+                for n in range(self.nof_signals_per_fpga * self.frequency_channels):
+                    self.data_buff_scrambled[(n % self.nof_signals_per_fpga) + self.nof_signals_per_fpga * b, n / self.nof_signals_per_fpga] = self.data_reassembled[b, n]
+            self.data_buff = self.data_buff_scrambled
 
     def detect_full_buffer(self):
         if self.prev_timestamp_channel != self.timestamp:
@@ -128,23 +134,29 @@ class SpeadRx:
         else:
             return False
 
+    def reverse_bit(self, num):
+        step = int(np.log2(self.frequency_channels))
+        result = 0
+        for n in range(step):
+            result += (num & 1) << (step - n - 1)
+            num >>= 1
+        return result
+
     def bit_reversal(self):
-        bit_width = int(np.log2(self.frequency_channels))
-        bit_format = '{:0' + str(bit_width) + 'b}'
-        print bit_format
-        print int(bit_format.format(8192)[::-1], 2)
-        temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
-        for b in range(4):
+        temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=self.data_type)
+        for b in range(self.nof_signals):
             for n in range(self.frequency_channels):
-                channel = int(bit_format.format(n)[::-1], 2)
+                channel = self.reverse_bit(n)
                 temp_buff[b, channel] = self.data_buff[b, n]
-                #print n
-                #print channel
-                #raw_input()
+                # print n
+                # print channel
+                # raw_input()
         self.data_buff = temp_buff
 
     def buff_descramble(self):
-        temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=np.uint64)
+        if self.nof_signals_per_fpga == 1:
+            return
+        temp_buff = np.zeros((self.nof_signals, self.frequency_channels), dtype=self.data_type)
         for b in range(self.nof_signals):
             for n in range(self.frequency_channels):
                 if n % 2 == 0:
@@ -153,7 +165,6 @@ class SpeadRx:
                     channel = n / 2 + self.frequency_channels / 2
                 temp_buff[b, channel] = self.data_buff[b, n]
         self.data_buff = temp_buff
-
 
     def run(self, sock, accu=1, nof_samples=-1):
         num = 0
@@ -170,14 +181,21 @@ class SpeadRx:
                 self.spead_header_decode(_pkt)
 
                 if self.is_spead:
-                    self.write_buff(unpack('<' + 'q' * (self.payload_length / 8), _pkt[self.offset:]))
+                    if self.is_floating_point == 1:
+                        unpack_type = 'd'
+                    else:
+                        unpack_type = 'q'
+                    self.write_buff(unpack('<' + unpack_type * (self.payload_length / 8), _pkt[self.offset:]))
+
                     buffer_ready = self.detect_full_buffer()
                     if buffer_ready: # channelized data
                         self.buffer_demux()
                         self.buff_descramble()
+                        if self.is_floating_point == 1:
+                            self.bit_reversal()
 
                         num += 1
-                        print "Full buffer received: " + str(num)
+                        print("Full buffer received: " + str(num))
 
                         if num % accu == 1 or accu == 1:
                             self.data_buff_accu = self.data_buff
@@ -190,22 +208,23 @@ class SpeadRx:
                             if self.write_hdf5:
                                 self.hdf5_channel.create_dataset(str(self.timestamp), data=self.data_buff_accu)
 
-                        plt.figure(0)
-                        plt.clf()
-                        plt.title("Integrated Channelized data %d" % num)
+                        if self.show_plot:
+                            plt.figure(0)
+                            plt.clf()
+                            plt.title("Integrated Channelized data %d" % num)
 
-                        for b in range(self.nof_signals):
-                            for n in range(self.nof_signals):
+                            for b in range(self.nof_signals):
                                 log_plot = np.zeros(self.frequency_channels)
                                 for n in range(self.frequency_channels):
                                     if self.data_buff[b, n] > 0:
-                                        log_plot[n] = 10*np.log10(self.data_buff_accu[b, n])
+                                        log_plot[n] = 10 * np.log10(self.data_buff_accu[b, n])
                                     else:
                                         log_plot[n] = 0.0
-                            plt.plot(log_plot.tolist())
-                            #plt.plot(self.data_buff[n].tolist())
-                        plt.draw()
-                        plt.pause(0.0001)
+                                plt.plot(log_plot.tolist())
+                                #plt.plot(self.data_buff[n].tolist())
+                            plt.draw()
+                            plt.pause(0.0001)
+                        return self.data_buff_accu
 
         if self.write_hdf5:
             self.hdf5_channel.close()
