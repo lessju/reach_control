@@ -21,10 +21,12 @@ spectrometer = None
 # Global thread stop flag
 stop_acquisition = False
 
+
 def _signal_handler(signum, frame):
     global stop_acquisition
     logging.info("Received interrupt, stopping acqusition")
     stop_acquisition = True
+
 
 def create_output_file(data_file_name, name="test"):
     """ Create HDF5 output file """
@@ -145,15 +147,15 @@ if __name__ == "__main__":
     from sys import argv, stdout
 
     parser = OptionParser(usage="usage: %spectrometr [options]")
-    parser.add_option("-I", dest="initialise", default=False, action="store_true", 
+    parser.add_option("-I", dest="initialise", default=False, action="store_true",
                       help="Initialise spectrometer (default: False)")
-    parser.add_option("-a", dest="accumulate", default=1, type=int, 
+    parser.add_option("-a", dest="accumulate", default=1, type=int,
                       help="Number of spectra to accumulate (default: 1)")
-    parser.add_option("-n", dest="nof_spectra", default=-1, type=int, 
+    parser.add_option("-n", dest="nof_spectra", default=-1, type=int,
                       help="Number of accumulated samples (default: -1)")
-    parser.add_option("-f", dest="output", default="", 
+    parser.add_option("-f", dest="output", default="",
                       help="Write spectra to file using provided filename (default: No output)")
-    parser.add_option("--rms-cadence", dest="rms_cadence", type=int, default=-1, 
+    parser.add_option("--rms-cadence", dest="rms_cadence", type=int, default=-1,
                       help="Number of seconds between RMS measurements (default: -1 seconds, do not record)")
     (options, args) = parser.parse_args()
 
@@ -165,9 +167,9 @@ if __name__ == "__main__":
 
     # Initialise spectrometer
     if options.initialise:
-        spectrometer = Spectrometer(ip=conf['ip'], 
+        spectrometer = Spectrometer(ip=conf['ip'],
                                     port=conf['port'],
-                                    lmc_ip=conf['lmc_ip'], 
+                                    lmc_ip=conf['lmc_ip'],
                                     lmc_port=conf['lmc_port'])
 
         bitstream = os.path.join(os.environ['REACH_CONFIG_DIRECTORY'], conf['bitstream'])
@@ -208,15 +210,15 @@ if __name__ == "__main__":
             options.rms_cadence = False
         else:
             # If spectrometer is not connected, connect it
-            spectrometer = Spectrometer(ip=conf['ip'], 
+            spectrometer = Spectrometer(ip=conf['ip'],
                                         port=conf['port'],
-                                        lmc_ip=conf['lmc_ip'], 
+                                        lmc_ip=conf['lmc_ip'],
                                         lmc_port=conf['lmc_port'],
                                         enable_spectra=False)
             spectrometer.connect()
 
             # Create RMS thread
-            rms_thread = threading.Thread(target=monitor_rms, args=(options.rms_cadence, ))
+            rms_thread = threading.Thread(target=monitor_rms, args=(options.rms_cadence,))
             rms_thread.start()
 
     # Wait for exit or termination
@@ -227,7 +229,7 @@ if __name__ == "__main__":
 
     # Look over number of required accumulations
     for accumulation in range(options.nof_spectra):
-        
+
         # Grab spectra
         spectra.start_receiver(options.accumulate)
         timestamps, data = spectra.wait_for_receiver()
@@ -243,7 +245,9 @@ if __name__ == "__main__":
 
         # Update plot
         plt.clf()
-        plt.title("Integrated Channelized data {} - {}".format(accumulation, datetime.datetime.fromtimestamp(timestamps[0]).strftime("%H:%M:%S")))
+        plt.title("Integrated Channelized data {} - {}".format(accumulation,
+                                                               datetime.datetime.fromtimestamp(timestamps[0]).strftime(
+                                                                   "%H:%M:%S")))
         plt.plot(data[0, :], label="Channel 0")
         plt.plot(data[1, :], label="Channel 1")
         plt.plot(data[2, :], label="Channel 2")
@@ -263,6 +267,3 @@ if __name__ == "__main__":
     # Finished acquiring data
     logging.info("Finished acquiring data. Press Enter to quit")
     input()
-
-
-

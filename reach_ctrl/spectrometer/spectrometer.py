@@ -10,7 +10,8 @@ from reach_ctrl.spectrometer.tile_reach import Tile
 from reach_ctrl.spectrometer.spectra import Spectra
 from reach_ctrl.reach_config import REACHConfig
 
-__author__ = 'Alessio Magro'                     
+__author__ = 'Alessio Magro'
+
 
 class Spectrometer(object):
 
@@ -107,6 +108,7 @@ class Spectrometer(object):
         spectra = np.sum(spectra, axis=0)
         return timestamps, spectra[channel, :]
 
+
 if __name__ == "__main__":
 
     # Use OptionParse to get command-line arguments
@@ -128,9 +130,10 @@ if __name__ == "__main__":
 
     # Initialise REACH config
     conf = REACHConfig()['spectrometer']
-    
+
     # Create tile instance
-    tile = Spectrometer(conf['ip'], int(conf['port']), conf['lmc_ip'], int(conf['lmc_port']), enable_spectra=command_line_args.spectra)
+    tile = Spectrometer(conf['ip'], int(conf['port']), conf['lmc_ip'], int(conf['lmc_port']),
+                        enable_spectra=command_line_args.spectra)
 
     # Program CPLD
     if command_line_args.program_cpld:
@@ -141,10 +144,11 @@ if __name__ == "__main__":
     if command_line_args.program:
         logging.info("Programming FPGAs")
         tile.program(os.path.join(os.path.expanduser(os.environ['REACH_CONFIG_DIRECTORY']), conf['bitstream']))
-    
+
     # Initialise TPM if required
     if command_line_args.initialise:
-        tile.initialise(int(conf['channel_truncation']), int(conf['integration_time']), int(conf['channel_scaling']), int(conf['ada_gain']))
+        tile.initialise(int(conf['channel_truncation']), int(conf['integration_time']), int(conf['channel_scaling']),
+                        int(conf['ada_gain']))
 
     # Connect to board
     tile.connect()
