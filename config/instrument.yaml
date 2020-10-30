@@ -17,9 +17,9 @@ spectrometer:
     name: tpm
     ip: 10.0.10.2
     port: 10000
-    lmc_ip: 10.0.10.10
+    lmc_ip: 10.0.10.100
     lmc_port: 4660
-    bitstream: itpm_v1_1_tpm_reach_wrap_v11.bit
+    bitstream: itpm_v1_1_tpm_reach_wrap_v51.bit
     nof_frequency_channels: 16384
     channel_scaling: 0x1FFF
     integration_time: 1

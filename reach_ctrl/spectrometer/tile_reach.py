@@ -966,10 +966,10 @@ class Tile(object):
 
         coeff_ram = np.zeros(old_div(N,NOF_RAM_PER_STAGE), dtype=int)
         for s in range(S):
-            print("stage " + str(s))
+            # print("stage " + str(s))
             for ram in range(NOF_RAM_PER_STAGE):
                 if s < stages:
-                    print("ram " + str(ram))
+                    # print("ram " + str(ram))
                     idx = 0
                     for n in range(N):
                         if old_div((n % MUX), MUX_PER_RAM) == ram:
@@ -1057,7 +1057,7 @@ class Tile(object):
 
         for n in range(16):
             if n in [1,2,3,5,6,7,9,10,11,13,14,15]:
-                print("Disabling ADC " + str(n))
+                log.info("Disabling ADC " + str(n))
                 self["adc" + str(n), 0x3F] = 0x0
                 self["adc" + str(n), 0x40] = 0x0
             else:

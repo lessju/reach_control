@@ -104,15 +104,15 @@ class SpeadRx:
             elif spead_id == 0x3300:
                 self.offset = 9*8
             else:
-                print "Error in SPEAD header decoding!"
-                print "Unexpected item " + hex(spead_item) + " at position " + str(idx)
+                print("Error in SPEAD header decoding!")
+                print("Unexpected item " + hex(spead_item) + " at position " + str(idx))
         if self.start_antenna_id >= self.nof_signals:
             # print "Dropping packet from FPGA2"
             self.is_spead = 0
 
     def write_buff(self, data):
         idx = self.start_channel_id * self.nof_signals_per_fpga
-        self.data_reassembled[self.start_antenna_id / self.nof_signals_per_fpga, idx:idx + (self.payload_length / self.data_byte)] = data
+        self.data_reassembled[self.start_antenna_id // self.nof_signals_per_fpga, idx:idx + (self.payload_length // self.data_byte)] = data
         self.recv_packets += 1
 
     def buffer_demux(self):
@@ -175,7 +175,7 @@ class SpeadRx:
                 _pkt, _addr = sock.recvfrom(1024*10)
                 packet_ok = 1
             except socket.timeout:
-                print "socket timeout!"
+                print("socket timeout!")
 
             if packet_ok:
                 self.spead_header_decode(_pkt)
@@ -185,7 +185,7 @@ class SpeadRx:
                         unpack_type = 'd'
                     else:
                         unpack_type = 'q'
-                    self.write_buff(unpack('<' + unpack_type * (self.payload_length / 8), _pkt[self.offset:]))
+                    self.write_buff(unpack('<' + unpack_type * int((self.payload_length / 8)), _pkt[self.offset:]))
 
                     buffer_ready = self.detect_full_buffer()
                     if buffer_ready: # channelized data
@@ -204,7 +204,7 @@ class SpeadRx:
 
                         if num % accu == 0 or accu == 1:
                             accu_num += 1
-                            print "Full integration " + str(accu_num) + " ready"
+                            print("Full integration " + str(accu_num) + " ready")
                             if self.write_hdf5:
                                 self.hdf5_channel.create_dataset(str(self.timestamp), data=self.data_buff_accu)
 
@@ -224,7 +224,7 @@ class SpeadRx:
                                 #plt.plot(self.data_buff[n].tolist())
                             plt.draw()
                             plt.pause(0.0001)
-                        return self.data_buff_accu
+                        #return self.data_buff_accu
 
         if self.write_hdf5:
             self.hdf5_channel.close()

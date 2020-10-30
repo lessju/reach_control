@@ -65,8 +65,8 @@ def add_spectrum_to_file(spectrum, timestamp, name="test"):
         # If data sets do not exist, add them
         if dataset_name not in dset.keys():
             dset.create_dataset(dataset_name,
-                                (4, 0, nof_frequency_channels),
-                                maxshape=(4, None, nof_frequency_channels),
+                                (2, 0, nof_frequency_channels),
+                                maxshape=(2, None, nof_frequency_channels),
                                 chunks=True,
                                 dtype='f8')
 
@@ -120,6 +120,45 @@ def add_rms_to_file(rms, timestamp, name="test"):
         dset[-1, 1:] = rms
 
 
+def add_temperatures_to_file(temps, timestamp, name="test"):
+    """ Add RMS to data file
+    :param temps: The temperatures
+    :param name: The data name
+    :param timestamp: Spectrum timestsamp
+    :param name: Input source name """
+
+    # Sanity check on temps
+    if len(temps) == 0:
+        return
+
+    with h5py.File(data_file_name, 'a') as f:
+        # Create dataset names
+        dataset_name = "{}_temperatures".format(name)
+
+        # Load observation data group
+        dset = f['observation_info']
+
+        if 'channel_names' not in dset.attrs.keys():
+            dset.attrs['channel_names'] = "COLD_JUNCTION, COLD, HOT, LNA, LOAD, GORE28, GORE89, TPM, AMBIENT"
+
+        # If data sets do not exist, add them
+        if dataset_name not in dset.keys():
+            dset.create_dataset(dataset_name,
+                                (0, temps.shape[0] + 1),
+                                maxshape=(None, temps.shape[0] + 1),
+                                chunks=True,
+                                dtype='f4')
+
+            logging.info("Added {} dataset to output file".format(dataset_name))
+            f.flush()
+
+        # Add spectrum and timestamp to buffer
+        dset = f['observation_info/{}'.format(dataset_name)]
+        dset.resize((dset.shape[0] + 1, dset.shape[1]))
+        dset[-1, 0] = timestamp
+        dset[-1, 1:] = temps
+
+
 def monitor_rms(cadence):
     """ Monitor RMS thread
     :param cadence: Time between measurements """
@@ -135,6 +174,70 @@ def monitor_rms(cadence):
 
         # Add RMS to file
         add_rms_to_file(rms, timestamp)
+
+        # Sleep for required time
+        time.sleep(cadence)
+
+def monitor_temperatures(cadence):
+    """ Monitor temperatures thread
+    :param cadence: Time between measurements """
+    global stop_acquisition
+
+    # Initialise picologger device
+    import ctypes
+    from picosdk.usbtc08 import usbtc08 as tc08
+    from picosdk.functions import assert_pico2000_ok
+
+    # Create chandle and status ready for use
+    chandle = ctypes.c_int16()
+    status = {}
+
+    # open unit
+    chandle = None
+    try:
+        ret = tc08.usb_tc08_open_unit()
+        assert_pico2000_ok(ret)
+        chandle = ret   
+    except:
+        logging.error("Could not initialised picologger. Not getting temperatures")
+        return
+
+    try:
+        # Set mains rejection to 50 Hz
+        status["set_mains"] = tc08.usb_tc08_set_mains(chandle,0)
+        assert_pico2000_ok(status["set_mains"])
+
+        # Set up channels (all type K, cold junction needs to be C)
+        typeC = ctypes.c_int8(67)        
+        assert_pico2000_ok(tc08.usb_tc08_set_channel(chandle, 0, typeC))
+
+        typeK = ctypes.c_int8(75)        
+        for channel in range(1, 9):
+            assert_pico2000_ok(tc08.usb_tc08_set_channel(chandle, channel, typeK))
+    except:
+        logging.error("Error while setting up picologger. Not getting temperatures")
+        tc08.usb_tc08_close_unit(chandle)
+        return
+
+    temp = (ctypes.c_float * 9)()
+    overflow = ctypes.c_int16(0)
+    units = tc08.USBTC08_UNITS["USBTC08_UNITS_CENTIGRADE"]
+        
+    # Read temperatures till told to stop
+    while not stop_acquisition:
+        # Read temperatures
+        try:
+            assert_pico2000_ok(tc08.usb_tc08_get_single(chandle,ctypes.byref(temp), ctypes.byref(overflow), units))
+        except:
+            logging.error("Error while getting temperatures, not reading temperatures anymore")
+            tc08.usb_tc08_close_unit(chandle)
+            return
+            
+        # Get timestamp
+        timestamp = time.time()
+
+        # Add RMS to file
+        add_temperatures_to_file(np.array(temp), timestamp)
 
         # Sleep for required time
         time.sleep(cadence)
@@ -157,6 +260,8 @@ if __name__ == "__main__":
                       help="Write spectra to file using provided filename (default: No output)")
     parser.add_option("--rms-cadence", dest="rms_cadence", type=int, default=-1,
                       help="Number of seconds between RMS measurements (default: -1 seconds, do not record)")
+    parser.add_option("--temp-cadence", dest="temp_cadence", type=int, default=-1, 
+                      help="Number of seconds between temperature measurements (default: -1 seconds, do not record)")
     (options, args) = parser.parse_args()
 
     # Initialise REACH config
@@ -202,6 +307,16 @@ if __name__ == "__main__":
         options.output = "{}.hdf5".format(options.output)
         create_output_file(options.output)
         data_file_name = options.output
+
+    # Sanity check on RMS measurements
+    if options.temp_cadence != -1:
+        if options.output == "":
+            logging.warning("Temperature monitoring can only be enabled when writing to file, ignoring")
+            options.temp_cadence = False
+        else:
+            # Create RMS thread
+            temp_thread = threading.Thread(target=monitor_temperatures, args=(options.temp_cadence, ))
+            temp_thread.start()
 
     # Sanity check on RMS measurements
     if options.rms_cadence != -1:
@@ -250,8 +365,8 @@ if __name__ == "__main__":
                                                                    "%H:%M:%S")))
         plt.plot(data[0, :], label="Channel 0")
         plt.plot(data[1, :], label="Channel 1")
-        plt.plot(data[2, :], label="Channel 2")
-        plt.plot(data[3, :], label="Channel 3")
+#        plt.plot(data[2, :], label="Channel 2")
+#        plt.plot(data[3, :], label="Channel 3")
         plt.xlabel("Frequency Channel")
         plt.ylabel("Arbitrary Power (dB)")
         plt.legend()

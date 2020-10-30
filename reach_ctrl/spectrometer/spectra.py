@@ -210,6 +210,8 @@ class Spectra(object):
                     else:
                         channel = old_div(n, 2) + self._nof_channels // 2
                     self._data_buffer[b, channel] = self._data_temporary_buffer[b, n]
+        else:
+            self._data_buffer[:] = self._data_temporary_buffer
 
         # Reverse bits if use floating point
         if self._use_floating_point:
@@ -217,16 +219,19 @@ class Spectra(object):
             for b in range(self._nof_signals):
                 for n in range(self._nof_channels):
                     # Perform reversal
-                    step = int(np.log2(self._nof_channels))
-                    channel = 0
-                    for i in range(step):
-                        channel += (n & 1) << (step - i - 1)
-                        n >>= 1
+                    channel = self._reverse_bit(n)
                     self._data_temporary_buffer[:][b, channel] = self._data_buffer[b, n]
 
             # Copy final buffer
             self._data_buffer[:] = self._data_temporary_buffer
 
+    def _reverse_bit(self, num):
+        step = int(np.log2(self._nof_channels))
+        result = 0
+        for n in range(step):
+            result += (num & 1) << (step - n - 1)
+            num >>= 1
+        return result
 
     def _detect_full_buffer(self):
         """ Check whether we have a full buffer """
@@ -263,12 +268,11 @@ if __name__ == "__main__":
     spectra = Spectra(ip=config.ip, port=config.port)
     spectra.initialise()
     spectrum = 10 * np.log10(spectra.receive_spectrum()[1])
+    print(spectrum.shape)
 
     from matplotlib import pyplot as plt
 
     plt.plot(spectrum[0], label="Channel 0")
     plt.plot(spectrum[1], label="Channel 1")
-    plt.plot(spectrum[2], label="Channel 2")
-    plt.plot(spectrum[3], label="Channel 3")
     plt.legend()
     plt.show()
