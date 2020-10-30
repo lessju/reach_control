@@ -623,6 +623,8 @@ class Tile(object):
     def start_acquisition(self, start_time=None, delay=2):
         """ Start data acquisition """
 
+        # Power down unused ADC
+        self.unused_adc_power_down()
         # Temporary (moved here from TPM control)
         try:
             self.tpm['fpga1.regfile.c2c_stream_header_insert'] = 0x1
@@ -1046,9 +1048,15 @@ class Tile(object):
 
         time.sleep(0.1)
 
-    def unused_adc_power_down(self, adc):
+    def unused_adc_power_down(self):
+
+        self['fpga1.jesd204_if.core_id_0_lanes_in_use'] = 0x3
+        self['fpga1.jesd204_if.core_id_1_lanes_in_use'] = 0x3
+        self['fpga2.jesd204_if.core_id_0_lanes_in_use'] = 0x3
+        self['fpga2.jesd204_if.core_id_1_lanes_in_use'] = 0x3
+
         for n in range(16):
-            if n in adc:
+            if n in [1,2,3,5,6,7,9,10,11,13,14,15]:
                 print("Disabling ADC " + str(n))
                 self["adc" + str(n), 0x3F] = 0x0
                 self["adc" + str(n), 0x40] = 0x0
