@@ -224,7 +224,7 @@ class SpeadRx:
                                 #plt.plot(self.data_buff[n].tolist())
                             plt.draw()
                             plt.pause(0.0001)
-                        #return self.data_buff_accu
+        return self.data_buff_accu
 
         if self.write_hdf5:
             self.hdf5_channel.close()

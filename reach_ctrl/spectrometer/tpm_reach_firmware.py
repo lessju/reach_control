@@ -84,7 +84,7 @@ class TpmReachFirmware(FirmwareBlock):
         self._patterngen = self.board.load_plugin("TpmPatternGenerator", device=self._device)
         self._power_meter = self.board.load_plugin("AdcPowerMeterSimple", device=self._device, fsample=old_div(self._fsample,(self._decimation*self._adc_clock_divider)), samples_per_frame=32768)
         self._integrator = self.board.load_plugin("TpmIntegrator", device=self._device, fsample=old_div(self._fsample,(self._decimation*self._adc_clock_divider)), nof_frequency_channels=16384, oversampling_factor=1.0)
-
+        self._polyfilter = self.board.load_plugin("PolyFilter", device=self._device)
         self._device_name = "fpga1" if self._device is Device.FPGA_1 else "fpga2"
 
     def fpga_clk_sync(self):

@@ -353,6 +353,13 @@ class Tile(object):
         """ Checks whether there are any pending data requests """
         return (self["fpga1.lmc_gen.request"] + self["fpga2.lmc_gen.request"]) > 0
 
+    @connected
+    def download_polyfilter_coeffs(self, window="hann", bin_width_scaling=1.0):
+        self.tpm.polyfilter[0].get_available_windows()
+        for n in range(2):
+            self.tpm.polyfilter[n].set_window(window, bin_width_scaling)
+            self.tpm.polyfilter[n].download_coeffs()
+
     #######################################################################################
 
     @connected
@@ -935,68 +942,104 @@ class Tile(object):
         self.tpm.test_generator[1].channel_select((inputs >> 16) & 0xFFFF)
 
     # ---------------------------- Polyphase configuration ----------------------------
-
-    def load_default_poly_coeffs(self, removed_stages=0):
-        N = self['fpga1.poly.config1.length']
-        S = self['fpga1.poly.config1.stages']
-        C = self['fpga1.poly.config2.coeff_data_width']
-        MUX = self['fpga1.poly.config1.mux']
-        MUX_PER_RAM = self['fpga1.poly.config2.coeff_mux_per_ram']
-        NOF_RAM_PER_STAGE = int(MUX / MUX_PER_RAM)
-        IS_FLOATING_POINT = self['fpga1.dsp_regfile.feature.use_floating_point']
-
-        stages = S - removed_stages
-        M = N * stages
-
-        base_width = C
-        while base_width > 32:
-            base_width /= 2
-        aspect_ratio_coeff = int(C / base_width)
-
-        coeff = np.zeros(M, dtype=int)
-        for i in range(M):
-            a0 = 0.5 #0.53836
-            window_val = a0 - (1 - a0) * np.cos(2.0 * np.pi * i / float(M))
-            real_val = window_val * np.sinc((i - M / 2.0) / float(N))
-            real_val *= (2**(C - 1) - 1)  # rescaling
-            if IS_FLOATING_POINT == 1:
-                coeff[i] = np.asarray(real_val, dtype=np.float32).view(np.int32).item()
-            else:
-                coeff[i] = int(round(real_val))
-
-        coeff_ram = np.zeros(old_div(N,NOF_RAM_PER_STAGE), dtype=int)
-        for s in range(S):
-            # print("stage " + str(s))
-            for ram in range(NOF_RAM_PER_STAGE):
-                if s < stages:
-                    # print("ram " + str(ram))
-                    idx = 0
-                    for n in range(N):
-                        if old_div((n % MUX), MUX_PER_RAM) == ram:
-                            coeff_ram[idx] = coeff[N * (stages-1-s) + n]
-                            idx += 1
-
-                    if aspect_ratio_coeff > 1:
-                        coeff_ram_arc = np.zeros(old_div(N, NOF_RAM_PER_STAGE) * aspect_ratio_coeff, dtype=int)
-                        for n in range(old_div(N, NOF_RAM_PER_STAGE)):
-                            for m in range(aspect_ratio_coeff):
-                                coeff_ram_arc[n * aspect_ratio_coeff + m] = coeff_ram[n] >> (
-                                    old_div(m * C, aspect_ratio_coeff))
-                    else:
-                        coeff_ram_arc = coeff_ram
-
-                else:
-                    if aspect_ratio_coeff > 1:
-                        coeff_ram_arc = np.zeros(old_div(N, NOF_RAM_PER_STAGE) * aspect_ratio_coeff, dtype=int)
-                    else:
-                        coeff_ram_arc = np.zeros(old_div(N,NOF_RAM_PER_STAGE), dtype=int)
-
-                self['fpga1.poly.address.mux_ptr'] = ram
-                self['fpga1.poly.address.stage_ptr'] = s
-                self['fpga2.poly.address.mux_ptr'] = ram
-                self['fpga2.poly.address.stage_ptr'] = s
-                self['fpga1.poly.coeff'] = coeff_ram_arc.tolist()
-                self['fpga2.poly.coeff'] = coeff_ram_arc.tolist()
+    # def get_window_val(self, idx, window_type, idx):
+    #     if window_type == "rectangular":
+    #         window_val = 1.0
+    #     elif window_type == "hann":
+    #         a0 = 0.5
+    #         a1 = 1 - a0
+    #         window_val = a0 - a1 * np.cos(2.0 * np.pi * i / float(idx))
+    #     elif window_type == "hamming":
+    #         a0 = 25.0 / 46.0
+    #         a1 = 1 - a0
+    #         window_val = a0 - a1 * np.cos(2.0 * np.pi * i / float(idx))
+    #     elif window_type = "blackman":
+    #         a0 = 7938.0 / 18608.0
+    #         a1 = 9240.0 / 18608.0
+    #         a2 = 1430.0 / 18608.0
+    #         window_val = a0 - a1 * np.cos(2.0 * np.pi * i / float(idx)) + a2 * np.cos(4.0 * np.pi * i / float(idx))
+    #     elif window_type = "nutall":
+    #         a0 = 0.355768
+    #         a1 = 0.487396
+    #         a2 = 0.144232
+    #         a3 = 0.012604
+    #         window_val = a0 - a1 * np.cos(2.0 * np.pi * i / float(idx)) + a2 * np.cos(4.0 * np.pi * i / float(idx)) - a3 * np.cos(6.0 * np.pi * i / float(idx))
+    #     elif window_type = "blackman-nuttall":
+    #         a0 = 0.3635819
+    #         a1 = 0.4891775
+    #         a2 = 0.1365995
+    #         a3 = 0.0106411
+    #         window_val = a0 - a1 * np.cos(2.0 * np.pi * i / float(idx)) + a2 * np.cos(4.0 * np.pi * i / float(idx)) - a3 * np.cos(6.0 * np.pi * i / float(idx))
+    #     elif window_type = "blackman-harris":
+    #         a0 = 0.35875
+    #         a1 = 0.48829
+    #         a2 = 0.14128
+    #         a3 = 0.01168
+    #         window_val = a0 - a1 * np.cos(2.0 * np.pi * i / float(idx)) + a2 * np.cos(4.0 * np.pi * i / float(idx)) - a3 * np.cos(6.0 * np.pi * i / float(idx))
+    #     return window_val
+    #
+    # def load_default_poly_coeffs(self, window_type="" removed_stages=0):
+    #     N = self['fpga1.poly.config1.length']
+    #     S = self['fpga1.poly.config1.stages']
+    #     C = self['fpga1.poly.config2.coeff_data_width']
+    #     MUX = self['fpga1.poly.config1.mux']
+    #     MUX_PER_RAM = self['fpga1.poly.config2.coeff_mux_per_ram']
+    #     NOF_RAM_PER_STAGE = int(MUX / MUX_PER_RAM)
+    #     IS_FLOATING_POINT = self['fpga1.dsp_regfile.feature.use_floating_point']
+    #
+    #     stages = S - removed_stages
+    #     M = N * stages
+    #
+    #     base_width = C
+    #     while base_width > 32:
+    #         base_width /= 2
+    #     aspect_ratio_coeff = int(C / base_width)
+    #
+    #     coeff = np.zeros(M, dtype=int)
+    #     for i in range(M):
+    #         #a0 = 0.5 #0.53836
+    #         #window_val = a0 - (1 - a0) * np.cos(2.0 * np.pi * i / float(M))
+    #         window_val = get_window_val(M, window_type)
+    #         real_val = window_val * np.sinc((i - M / 2.0) / float(N))
+    #         real_val *= (2**(C - 1) - 1)  # rescaling
+    #         if IS_FLOATING_POINT == 1:
+    #             coeff[i] = np.asarray(real_val, dtype=np.float32).view(np.int32).item()
+    #         else:
+    #             coeff[i] = int(round(real_val))
+    #
+    #     coeff_ram = np.zeros(old_div(N,NOF_RAM_PER_STAGE), dtype=int)
+    #     for s in range(S):
+    #         # print("stage " + str(s))
+    #         for ram in range(NOF_RAM_PER_STAGE):
+    #             if s < stages:
+    #                 # print("ram " + str(ram))
+    #                 idx = 0
+    #                 for n in range(N):
+    #                     if old_div((n % MUX), MUX_PER_RAM) == ram:
+    #                         coeff_ram[idx] = coeff[N * (stages-1-s) + n]
+    #                         idx += 1
+    #
+    #                 if aspect_ratio_coeff > 1:
+    #                     coeff_ram_arc = np.zeros(old_div(N, NOF_RAM_PER_STAGE) * aspect_ratio_coeff, dtype=int)
+    #                     for n in range(old_div(N, NOF_RAM_PER_STAGE)):
+    #                         for m in range(aspect_ratio_coeff):
+    #                             coeff_ram_arc[n * aspect_ratio_coeff + m] = coeff_ram[n] >> (
+    #                                 old_div(m * C, aspect_ratio_coeff))
+    #                 else:
+    #                     coeff_ram_arc = coeff_ram
+    #
+    #             else:
+    #                 if aspect_ratio_coeff > 1:
+    #                     coeff_ram_arc = np.zeros(old_div(N, NOF_RAM_PER_STAGE) * aspect_ratio_coeff, dtype=int)
+    #                 else:
+    #                     coeff_ram_arc = np.zeros(old_div(N,NOF_RAM_PER_STAGE), dtype=int)
+    #
+    #             self['fpga1.poly.address.mux_ptr'] = ram
+    #             self['fpga1.poly.address.stage_ptr'] = s
+    #             self['fpga2.poly.address.mux_ptr'] = ram
+    #             self['fpga2.poly.address.stage_ptr'] = s
+    #             self['fpga1.poly.coeff'] = coeff_ram_arc.tolist()
+    #             self['fpga2.poly.coeff'] = coeff_ram_arc.tolist()
 
 
     def set_fpga_sysref_gen(self, sysref_period):
@@ -1057,7 +1100,7 @@ class Tile(object):
 
         for n in range(16):
             if n in [1,2,3,5,6,7,9,10,11,13,14,15]:
-                log.info("Disabling ADC " + str(n))
+                logging.info("Disabling ADC " + str(n))
                 self["adc" + str(n), 0x3F] = 0x0
                 self["adc" + str(n), 0x40] = 0x0
             else:

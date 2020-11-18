@@ -79,7 +79,8 @@ class Spectrometer(object):
         logging.info("Setting data acquisition")
         self._tile.start_acquisition()
 
-        self._tile.load_default_poly_coeffs()
+        # self._tile.load_default_poly_coeffs()
+        self._tile.download_polyfilter_coeffs("hann")
         self._tile['fpga1.dsp_regfile.channelizer_fft_bit_round'] = channel_scaling
         self._tile['fpga2.dsp_regfile.channelizer_fft_bit_round'] = channel_scaling
         self._tile['board.regfile.ethernet_pause'] = 8000
